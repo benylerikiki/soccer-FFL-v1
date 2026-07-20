@@ -5,11 +5,12 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import io
 import itertools
+import re
 
 # Configuration de la page Streamlit
 st.set_page_config(page_title="Soccer FFL Kompo", page_icon="⚽", layout="wide")
 
-# 📳 FORCE LE MODE GRILLE (3 COLONNES INDÉFORMABLES SUR MOBILE)
+# 📳 FORCE LE MODE GRILLE
 st.markdown(
     """
     <style>
@@ -34,27 +35,18 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- TEXTES OFFICIELS POUR LA BASE DE DONNÉES ---
-TEXT_OPTIONS = [
-    "1 - Pas bon",
-    "2 - Moyennement bon",
-    "3 - Assez bon",
-    "4 - Très bon"
-]
+TEXT_OPTIONS = ["1 - Pas bon", "2 - Moyennement bon", "3 - Assez bon", "4 - Très bon"]
 
-# Fonction pour convertir le texte de la BDD en chiffre (1 à 4) pour les calculs
 def text_to_score(text_value):
     text_str = str(text_value)
     if text_str.startswith("1"): return 1
     if text_str.startswith("2"): return 2
     if text_str.startswith("3"): return 3
     if text_str.startswith("4"): return 4
-    return 2 # Valeur par défaut
+    return 2
 
-# --- FICHIERS DE STOCKAGE ---
 DATA_FILE = 'database_joueurs_v2.xlsx'       
 
-# --- FONCTION DE CHARGEMENT ---
 def load_data():
     if os.path.exists(DATA_FILE):
         try: 
@@ -78,6 +70,9 @@ def save_data(df):
 if 'players_df' not in st.session_state:
     st.session_state.players_df = load_data()
 
+# Session state pour stocker les joueurs cochés automatiquement via la convocation
+if 'auto_selected' not in st.session_state:
+    st.session_state.auto_selected = set()
 
 # --- DESSIN DU TERRAIN ---
 def draw_combined_field(t1, t2):
@@ -140,7 +135,6 @@ def draw_combined_field(t1, t2):
 @st.dialog("Compositions du Match ⚽", width="large")
 def show_teams_popup(t1, t2):
     st.write("Match équilibré généré avec succès ! 📸")
-    
     fig_combined = draw_combined_field(t1, t2)
     st.pyplot(fig_combined, use_container_width=True)
     
@@ -149,7 +143,6 @@ def show_teams_popup(t1, t2):
     buf.seek(0)
     
     st.download_button(label="📸 Télécharger l'image (PNG)", data=buf, file_name="Compositions_FFL.png", mime="image/png", type="primary")
-    
     st.write("---")
     
     text_whatsapp = "⚽ *COMPOSITIONS DU MATCH* ⚽\n\n"
@@ -163,9 +156,7 @@ def show_teams_popup(t1, t2):
         
     st.markdown("**📋 Texte à copier pour WhatsApp (Noms uniquement) :**")
     st.code(text_whatsapp, language="text")
-        
-    if st.button("Fermer"): 
-        st.rerun()
+    if st.button("Fermer"): st.rerun()
 
 
 # --- INTERFACE PRINCIPALE ---
@@ -174,28 +165,111 @@ st.header("⚽ Soccer FFL Kompo")
 tab1, tab2 = st.tabs(["⚖️ Équilibrage du Jour", "🏃 Gestion de la Base"])
 
 with tab1:
+    # --- MODULE D'ANALYSE AUTOMATIQUE DE CONVOCATION ---
+    with st.expander("📋 Analyser une convocation WhatsApp (Optionnel)", expanded=False):
+        convoc_text = st.text_area("Colle le texte brut de ta convocation ici :", height=150, placeholder="Présents : nicoP (1) , dimeh(2)...")
+        
+        if st.button("🔍 Extraire et Valider les Joueurs"):
+            if convoc_text.strip():
+                # Extraction de la ligne après "Présents :"
+                match = re.search(r"Présents\s*:\s*(.*)", convoc_text, re.IGNORECASE)
+                if match:
+                    raw_presents = match.group(1).split("\n")[0] # On prend juste la ligne
+                    # On nettoie les chiffres entre parenthèses et on découpe par virgule ou espace
+                    # Supprime les (X) ou ( XX )
+                    cleaned_line = re.sub(r"\(\s*\d+\s*\)", "", raw_presents)
+                    # Découpe selon les virgules ou les espaces superflus
+                    extracted_names = [n.strip() for n in re.split(r"[, ]+", cleaned_line) if n.strip()]
+                    
+                    db_names = st.session_state.players_df["Nom du Joueur"].values
+                    db_names_lower = {name.lower(): name for name in db_names}
+                    
+                    found_players = set()
+                    unknown_names = []
+                    
+                    for name in extracted_names:
+                        # Test de correspondance (insensible à la casse)
+                        if name.lower() in db_names_lower:
+                            found_players.add(db_names_lower[name.lower()])
+                        else:
+                            unknown_names.append(name)
+                    
+                    st.session_state.auto_selected = found_players
+                    
+                    if unknown_names:
+                        st.warning(f"⚠️ {len(unknown_names)} joueur(s) inconnu(s) détecté(s) !")
+                        st.session_state.unknown_names = unknown_names
+                    else:
+                        st.success(f"✅ {len(found_players)} joueurs importés et cochés avec succès ! En avant pour les compos.")
+                else:
+                    st.error("Le mot 'Présents :' n'a pas été trouvé dans le texte.")
+            else:
+                st.error("Le texte est vide.")
+
+    # Formulaire dynamique si des joueurs inconnus ont été détectés
+    if 'unknown_names' in st.session_state and st.session_state.unknown_names:
+        st.info("💡 Résolution des joueurs inconnus :")
+        db_names = sorted(list(st.session_state.players_df["Nom du Joueur"].values))
+        
+        # On traite le premier joueur inconnu de la liste
+        current_unknown = st.session_state.unknown_names[0]
+        st.markdown(f"Le nom **{current_unknown}** n'est pas reconnu.")
+        
+        choice = st.radio(f"Que faire pour '{current_unknown}' ?", ["Il correspond à un joueur existant sous un autre nom", "Créer un nouveau joueur dans la base"], key=f"choice_{current_unknown}")
+        
+        if choice == "Il correspond à un joueur existant sous un autre nom":
+            linked_name = st.selectbox("Sélectionner le vrai profil existant :", options=db_names)
+            if st.button(f"Associer {current_unknown} à {linked_name}"):
+                st.session_state.auto_selected.add(linked_name)
+                st.session_state.unknown_names.pop(0)
+                st.rerun()
+        else:
+            with st.form(f"form_quick_add_{current_unknown}"):
+                new_clean_name = st.text_input("Nom définitif pour la base", value=current_unknown)
+                att_l = st.selectbox("Attaque", options=TEXT_OPTIONS, index=1)
+                def_l = st.selectbox("Défense", options=TEXT_OPTIONS, index=1)
+                col_l = st.selectbox("Collectif", options=TEXT_OPTIONS, index=2)
+                
+                if st.form_submit_button("💾 Enregistrer et Cocher"):
+                    if new_clean_name.strip():
+                        new_p = pd.DataFrame({
+                            "Nom du Joueur": [new_clean_name.strip()], 
+                            "Attaque": [att_l], "Défense": [def_l], "Collectif": [col_l]
+                        })
+                        st.session_state.players_df = pd.concat([st.session_state.players_df, new_p], ignore_index=True)
+                        save_data(st.session_state.players_df)
+                        st.session_state.auto_selected.add(new_clean_name.strip())
+                        st.session_state.unknown_names.pop(0)
+                        st.success(f"{new_clean_name.strip()} ajouté !")
+                        st.rerun()
+
+    st.write("---")
     st.subheader("Sélection des présents")
     
     df_sorted = st.session_state.players_df.sort_values(by="Nom du Joueur").reset_index(drop=True)
     counter_placeholder = st.empty()
     selected_names = []
     
+    # Affichage de la grille de cases à cocher (pré-remplie si auto_selected contient le nom)
     for i in range(0, len(df_sorted), 3):
         cols = st.columns(3)
         row1 = df_sorted.iloc[i]
         name1 = row1["Nom du Joueur"]
+        is_checked1 = name1 in st.session_state.auto_selected
         with cols[0]:
-            if st.checkbox(name1, key=f"select_{name1}"): selected_names.append(name1)
+            if st.checkbox(name1, key=f"select_{name1}", value=is_checked1): selected_names.append(name1)
         if i + 1 < len(df_sorted):
             row2 = df_sorted.iloc[i + 1]
             name2 = row2["Nom du Joueur"]
+            is_checked2 = name2 in st.session_state.auto_selected
             with cols[1]:
-                if st.checkbox(name2, key=f"select_{name2}"): selected_names.append(name2)
+                if st.checkbox(name2, key=f"select_{name2}", value=is_checked2): selected_names.append(name2)
         if i + 2 < len(df_sorted):
             row3 = df_sorted.iloc[i + 2]
             name3 = row3["Nom du Joueur"]
+            is_checked3 = name3 in st.session_state.auto_selected
             with cols[2]:
-                if st.checkbox(name3, key=f"select_{name3}"): selected_names.append(name3)
+                if st.checkbox(name3, key=f"select_{name3}", value=is_checked3): selected_names.append(name3)
                 
     selected_players = st.session_state.players_df[st.session_state.players_df["Nom du Joueur"].isin(selected_names)]
     nb_selected = len(selected_players)
@@ -210,16 +284,10 @@ with tab1:
     st.write("---")
     
     if nb_selected == 10:
-        # 🛡️ AJOUT DE LA SÉCURITÉ / RIVALITÉ
         st.markdown("### ⛔ Restriction d'affinité (Optionnel)")
-        
-        # Choix du joueur 1 à séparer
         j1 = st.selectbox("Sélectionner un joueur...", options=["Aucune restriction"] + sorted(selected_names), index=0)
-        
-        # Choix du joueur 2 (on retire le joueur 1 de la liste pour éviter de se choisir soi-même)
         remaining_options = [n for n in selected_names if n != j1] if j1 != "Aucune restriction" else []
         j2 = st.selectbox("... à ne surtout pas faire jouer avec :", options=["Aucun"] + sorted(remaining_options), index=0) if j1 != "Aucune restriction" else "Aucun"
-        
         st.write("")
         
         if st.button("⚡ Générer l'Équilibrage Parfait", type="primary"):
@@ -235,10 +303,9 @@ with tab1:
                 names_t1 = [p['Nom du Joueur'] for p in t1]
                 names_t2 = [p['Nom du Joueur'] for p in t2]
                 
-                # Blocage de la combinaison si j1 et j2 sont ensemble dans l'équipe 1 OU l'équipe 2
                 if j1 != "Aucune restriction" and j2 != "Aucun":
                     if (j1 in names_t1 and j2 in names_t1) or (j1 in names_t2 and j2 in names_t2):
-                        continue # On passe à la combinaison suivante, celle-ci est interdite !
+                        continue
                 
                 valid_combo_found = True
                 df_t1 = pd.DataFrame(t1)
@@ -264,7 +331,7 @@ with tab1:
                     best_team2 = df_t2
             
             if not valid_combo_found:
-                st.error("Impossible de générer les équipes avec cette contrainte (cela casserait la logique numérique), essayez sans restriction.")
+                st.error("Impossible de générer les équipes avec cette contrainte.")
             else:
                 st.session_state.last_team1 = best_team1
                 st.session_state.last_team2 = best_team2
@@ -284,11 +351,9 @@ with tab1:
 
 with tab2:
     st.header("Gestion de la base des joueurs")
-    
     with st.expander("➕ Ajouter manuellement un nouveau joueur"):
         with st.form("form_add"):
             name = st.text_input("Nom / Pseudo du joueur")
-            
             att_label = st.selectbox("Niveau en Attaque", options=TEXT_OPTIONS, index=1)
             def_label = st.selectbox("Niveau en Défense", options=TEXT_OPTIONS, index=1)
             col_label = st.selectbox("Niveau en Collectif", options=TEXT_OPTIONS, index=2)
@@ -296,10 +361,7 @@ with tab2:
             if st.form_submit_button("Ajouter le joueur"):
                 if name.strip() and name.strip() not in st.session_state.players_df["Nom du Joueur"].values:
                     new_player = pd.DataFrame({
-                        "Nom du Joueur": [name.strip()], 
-                        "Attaque": [att_label], 
-                        "Défense": [def_label], 
-                        "Collectif": [col_label]
+                        "Nom du Joueur": [name.strip()], "Attaque": [att_label], "Défense": [def_label], "Collectif": [col_label]
                     })
                     st.session_state.players_df = pd.concat([st.session_state.players_df, new_player], ignore_index=True)
                     save_data(st.session_state.players_df)
@@ -327,4 +389,4 @@ with tab2:
         save_data(edited_players)
         st.success("✅ Fichier Excel sauvegardé avec succès !")
         st.rerun()
-        
+                    
