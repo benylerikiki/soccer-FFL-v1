@@ -33,27 +33,22 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- CONFIGURATION DES CORRESPONDANCES DE NOTES ---
-OPTIONS_ATT = {
-    1: "1 - Pas bon en attaque",
-    2: "2 - Moyennement bon",
-    3: "3 - Plutôt bon",
-    4: "4 - Très bon"
-}
+# --- TEXTES OFFICIELS POUR LA BASE DE DONNÉES ---
+TEXT_OPTIONS = [
+    "1 - Pas bon",
+    "2 - Moyennement bon",
+    "3 - Assez bon",
+    "4 - Très bon"
+]
 
-OPTIONS_DEF = {
-    1: "1 - Pas bon en défense",
-    2: "2 - Moyennement bon",
-    3: "3 - Plutôt bon",
-    4: "4 - Très bon"
-}
-
-OPTIONS_COL = {
-    1: "1 - Pas bon en collectif",
-    2: "2 - Moyennement bon",
-    3: "3 - Plutôt bon",
-    4: "4 - Très bon"
-}
+# Fonction magique pour convertir le texte de la BDD en chiffre (1 à 4) pour les calculs
+def text_to_score(text_value):
+    text_str = str(text_value)
+    if text_str.startswith("1"): return 1
+    if text_str.startswith("2"): return 2
+    if text_str.startswith("3"): return 3
+    if text_str.startswith("4"): return 4
+    return 2 # Valeur par défaut si bug
 
 # --- FICHIERS DE STOCKAGE ---
 DATA_FILE = 'database_joueurs_v2.xlsx'       
@@ -62,15 +57,20 @@ DATA_FILE = 'database_joueurs_v2.xlsx'
 def load_data():
     if os.path.exists(DATA_FILE):
         try: 
-            return pd.read_excel(DATA_FILE)
+            df = pd.read_excel(DATA_FILE)
+            # Sécurité : on s'assure que les colonnes contiennent bien du texte valide
+            for col in ["Attaque", "Défense", "Collectif"]:
+                df[col] = df[col].apply(lambda x: x if str(x) in TEXT_OPTIONS else TEXT_OPTIONS[1])
+            return df
         except Exception: 
             pass
-    # Base par défaut avec le nouveau système (Attaque, Défense, Collectif)
+            
+    # Base par défaut textuelle si le fichier n'existe pas encore
     return pd.DataFrame({
         "Nom du Joueur": ["Antho", "Cyril V", "Apou", "Benoit", "Nico P", "Mouyss", "Cédric", "Nico M", "David", "Cyril L"],
-        "Attaque": [4, 2, 3, 4, 2, 3, 1, 3, 2, 1],
-        "Défense": [2, 4, 2, 1, 4, 1, 4, 2, 3, 3],
-        "Collectif": [3, 4, 3, 2, 3, 2, 3, 2, 2, 2]
+        "Attaque": ["4 - Très bon", "2 - Moyennement bon", "3 - Assez bon", "4 - Très bon", "2 - Moyennement bon", "3 - Assez bon", "1 - Pas bon", "3 - Assez bon", "2 - Moyennement bon", "1 - Pas bon"],
+        "Défense": ["2 - Moyennement bon", "4 - Très bon", "2 - Moyennement bon", "1 - Pas bon", "4 - Très bon", "1 - Pas bon", "4 - Très bon", "2 - Moyennement bon", "3 - Assez bon", "3 - Assez bon"],
+        "Collectif": ["3 - Assez bon", "4 - Très bon", "3 - Assez bon", "2 - Moyennement bon", "3 - Assez bon", "2 - Moyennement bon", "3 - Assez bon", "2 - Moyennement bon", "2 - Moyennement bon", "2 - Moyennement bon"]
     })
 
 def save_data(df):
@@ -80,45 +80,56 @@ if 'players_df' not in st.session_state:
     st.session_state.players_df = load_data()
 
 
-# --- DESSIN DU TERRAIN AVEC LES NOUVELLES INFOS ---
+# --- DESSIN DU TERRAIN ---
 def draw_combined_field(t1, t2):
     fig, ax = plt.subplots(figsize=(8, 5.2))
     fig.patch.set_facecolor('#226343')
     ax.set_facecolor('#226343')
     
-    # Lignes du terrain
     ax.plot([0, 100, 100, 0, 0], [0, 0, 60, 60, 0], color='white', linewidth=2.0)
     ax.plot([50, 50], [0, 60], color='white', linewidth=2.0)
     center_circle = patches.Circle((50, 30), 9, edgecolor='white', facecolor='none', linewidth=1.5)
     ax.add_patch(center_circle)
     ax.scatter(50, 30, color='white', s=15, zorder=2)
     
-    # Surfaces
     ax.add_patch(patches.Rectangle((0, 15), 12, 30, edgecolor='white', facecolor='none', linewidth=1.5))
     ax.scatter(9, 30, color='white', s=15, zorder=2)
     ax.add_patch(patches.Rectangle((88, 15), 12, 30, edgecolor='white', facecolor='none', linewidth=1.5))
     ax.scatter(91, 30, color='white', s=15, zorder=2)
     
-    # Placement Équipe 1 (Triée par Défense décroissante pour mettre les "défenseurs" derrière)
+    # Équipe 1 (Triée par son score numérique de défense)
     pos1 = [(7, 30), (22, 14), (22, 46), (40, 18), (40, 42)]
-    players1 = t1.sort_values(by="Défense", ascending=False).reset_index(drop=True)
+    players1 = t1.copy()
+    players1['Def_Num'] = players1['Défense'].apply(text_to_score)
+    players1 = players1.sort_values(by="Def_Num", ascending=False).reset_index(drop=True)
     for i, row in players1.iterrows():
         if i >= len(pos1): break
         x, y = pos1[i]
         ax.scatter(x, y, color="#1C6CF6", s=220, edgecolors='white', linewidths=1.5, zorder=3)
         ax.text(x, y - 4.2, row['Nom du Joueur'], color='white', fontsize=11, weight='bold', ha='center', va='center', zorder=4)
         
-    # Placement Équipe 2
+    # Équipe 2
     pos2 = [(93, 30), (78, 14), (78, 46), (60, 18), (60, 42)]
-    players2 = t2.sort_values(by="Défense", ascending=False).reset_index(drop=True)
+    players2 = t2.copy()
+    players2['Def_Num'] = players2['Défense'].apply(text_to_score)
+    players2 = players2.sort_values(by="Def_Num", ascending=False).reset_index(drop=True)
     for i, row in players2.iterrows():
         if i >= len(pos2): break
         x, y = pos2[i]
         ax.scatter(x, y, color="#E03131", s=220, edgecolors='white', linewidths=1.5, zorder=3)
         ax.text(x, y - 4.2, row['Nom du Joueur'], color='white', fontsize=11, weight='bold', ha='center', va='center', zorder=4)
     
-    ax.text(25, 64, f"EQUIPE 1\n(A:{t1['Attaque'].sum()} D:{t1['Défense'].sum()} C:{t1['Collectif'].sum()})", color='#1C6CF6', fontsize=12, weight='bold', ha='center', va='center')
-    ax.text(75, 64, f"EQUIPE 2\n(A:{t2['Attaque'].sum()} D:{t2['Défense'].sum()} C:{t2['Collectif'].sum()})", color='#E03131', fontsize=12, weight='bold', ha='center', va='center')
+    # Calcul des totaux numériques pour affichage sur le terrain
+    t1_att = t1['Attaque'].apply(text_to_score).sum()
+    t1_def = t1['Défense'].apply(text_to_score).sum()
+    t1_col = t1['Collectif'].apply(text_to_score).sum()
+    
+    t2_att = t2['Attaque'].apply(text_to_score).sum()
+    t2_def = t2['Défense'].apply(text_to_score).sum()
+    t2_col = t2['Collectif'].apply(text_to_score).sum()
+    
+    ax.text(25, 64, f"EQUIPE 1\n(A:{t1_att} D:{t1_def} C:{t1_col})", color='#1C6CF6', fontsize=12, weight='bold', ha='center', va='center')
+    ax.text(75, 64, f"EQUIPE 2\n(A:{t2_att} D:{t2_def} C:{t2_col})", color='#E03131', fontsize=12, weight='bold', ha='center', va='center')
     
     ax.set_xlim(-4, 104)
     ax.set_ylim(-6, 68)
@@ -139,30 +150,31 @@ def show_teams_popup(t1, t2):
     fig_combined.savefig(buf, format="png", bbox_inches='tight', dpi=250, facecolor='#226343')
     buf.seek(0)
     
-    st.download_button(
-        label="📸 Télécharger l'image (PNG)",
-        data=buf,
-        file_name="Compositions_FFL.png",
-        mime="image/png",
-        type="primary" 
-    )
+    st.download_button(label="📸 Télécharger l'image (PNG)", data=buf, file_name="Compositions_FFL.png", mime="image/png", type="primary")
     
     st.write("---")
     
+    t1_att = t1['Attaque'].apply(text_to_score).sum()
+    t1_def = t1['Défense'].apply(text_to_score).sum()
+    t1_col = t1['Collectif'].apply(text_to_score).sum()
+    
+    t2_att = t2['Attaque'].apply(text_to_score).sum()
+    t2_def = t2['Défense'].apply(text_to_score).sum()
+    t2_col = t2['Collectif'].apply(text_to_score).sum()
+    
     text_whatsapp = "⚽ *COMPOSITIONS DU MATCH EQUILIBRÉ* ⚽\n\n"
-    text_whatsapp += f"🔵 *ÉQUIPE 1* (Att: {t1['Attaque'].sum()} | Def: {t1['Défense'].sum()} | Coll: {t1['Collectif'].sum()}) :\n"
+    text_whatsapp += f"🔵 *ÉQUIPE 1* (Att: {t1_att} | Def: {t1_def} | Coll: {t1_col}) :\n"
     for _, row in t1.iterrows():
-        text_whatsapp += f"• {row['Nom du Joueur']} (A:{row['Attaque']} D:{row['Défense']} C:{row['Collectif']})\n"
+        text_whatsapp += f"• {row['Nom du Joueur']} (A:{text_to_score(row['Attaque'])} D:{text_to_score(row['Défense'])} C:{text_to_score(row['Collectif'])})\n"
         
-    text_whatsapp += f"\n🔴 *ÉQUIPE 2* (Att: {t2['Attaque'].sum()} | Def: {t2['Défense'].sum()} | Coll: {t2['Collectif'].sum()}) :\n"
+    text_whatsapp += f"\n🔴 *ÉQUIPE 2* (Att: {t2_att} | Def: {t2_def} | Coll: {t2_col}) :\n"
     for _, row in t2.iterrows():
-        text_whatsapp += f"• {row['Nom du Joueur']} (A:{row['Attaque']} D:{row['Défense']} C:{row['Collectif']})\n"
+        text_whatsapp += f"• {row['Nom du Joueur']} (A:{text_to_score(row['Attaque'])} D:{text_to_score(row['Défense'])} C:{text_to_score(row['Collectif'])})\n"
         
     st.markdown("**📋 Texte à copier pour WhatsApp :**")
     st.code(text_whatsapp, language="text")
         
-    if st.button("Fermer"):
-        st.rerun()
+    if st.button("Fermer"): st.rerun()
 
 
 # --- INTERFACE PRINCIPALE ---
@@ -177,24 +189,17 @@ with tab1:
     counter_placeholder = st.empty()
     selected_names = []
     
-    # Grille de 3 colonnes forcée sur mobile
     for i in range(0, len(df_sorted), 3):
         cols = st.columns(3)
-        
-        # Col 1
         row1 = df_sorted.iloc[i]
         name1 = row1["Nom du Joueur"]
         with cols[0]:
             if st.checkbox(name1, key=f"select_{name1}"): selected_names.append(name1)
-                
-        # Col 2
         if i + 1 < len(df_sorted):
             row2 = df_sorted.iloc[i + 1]
             name2 = row2["Nom du Joueur"]
             with cols[1]:
                 if st.checkbox(name2, key=f"select_{name2}"): selected_names.append(name2)
-                    
-        # Col 3
         if i + 2 < len(df_sorted):
             row3 = df_sorted.iloc[i + 2]
             name3 = row3["Nom du Joueur"]
@@ -204,7 +209,6 @@ with tab1:
     selected_players = st.session_state.players_df[st.session_state.players_df["Nom du Joueur"].isin(selected_names)]
     nb_selected = len(selected_players)
     
-    # Affichage dynamique du compteur tout en haut
     if nb_selected == 10:
         counter_placeholder.success("✅ 10 joueurs sélectionnés ! Prêts à générer.")
     elif nb_selected > 10:
@@ -216,13 +220,11 @@ with tab1:
     
     if nb_selected == 10:
         if st.button("⚡ Générer l'Équilibrage Parfait", type="primary"):
-            # ALGORITHME D'ÉQUILIBRAGE PAR COMBINATOIRE (Recherche de la meilleure combinaison sur les 3 critères)
             import itertools
             players_list = selected_players.to_dict(orient='records')
             best_diff = float('inf')
             best_team1, best_team2 = None, None
             
-            # On teste toutes les combinaisons possibles de 5 joueurs parmi les 10
             for combo in itertools.combinations(players_list, 5):
                 t1 = list(combo)
                 t2 = [p for p in players_list if p not in t1]
@@ -230,12 +232,19 @@ with tab1:
                 df_t1 = pd.DataFrame(t1)
                 df_t2 = pd.DataFrame(t2)
                 
-                # Calcul des écarts sur les 3 critères fondamentaux
-                diff_att = abs(df_t1['Attaque'].sum() - df_t2['Attaque'].sum())
-                diff_def = abs(df_t1['Défense'].sum() - df_t2['Défense'].sum())
-                diff_col = abs(df_t1['Collectif'].sum() - df_t2['Collectif'].sum())
+                # Conversion numérique temporaire pour le calcul de l'écart d'équilibrage
+                t1_att_sum = df_t1['Attaque'].apply(text_to_score).sum()
+                t1_def_sum = df_t1['Défense'].apply(text_to_score).sum()
+                t1_col_sum = df_t1['Collectif'].apply(text_to_score).sum()
                 
-                # Score global de déséquilibre (on cherche à minimiser ce total)
+                t2_att_sum = df_t2['Attaque'].apply(text_to_score).sum()
+                t2_def_sum = df_t2['Défense'].apply(text_to_score).sum()
+                t2_col_sum = df_t2['Collectif'].apply(text_to_score).sum()
+                
+                diff_att = abs(t1_att_sum - t2_att_sum)
+                diff_def = abs(t1_def_sum - t2_def_sum)
+                diff_col = abs(t1_col_sum - t2_col_sum)
+                
                 total_diff = diff_att + diff_def + diff_col
                 
                 if total_diff < best_diff:
@@ -263,15 +272,14 @@ with tab1:
 with tab2:
     st.header("Gestion de la base des joueurs")
     
-    # AJOUT MANUEL AVEC LISTES DÉROULANTES EXPLICITES
     with st.expander("➕ Ajouter manuellement un nouveau joueur"):
         with st.form("form_add"):
             name = st.text_input("Nom / Pseudo du joueur")
             
-            # Listes déroulantes basées sur les dictionnaires d'options textuelles
-            att_label = st.selectbox("Niveau en Attaque", options=list(OPTIONS_ATT.keys()), format_func=lambda x: OPTIONS_ATT[x], index=1)
-            def_label = st.selectbox("Niveau en Défense", options=list(OPTIONS_DEF.keys()), format_func=lambda x: OPTIONS_DEF[x], index=1)
-            col_label = st.selectbox("Niveau en Collectif", options=list(OPTIONS_COL.keys()), format_func=lambda x: OPTIONS_COL[x], index=2)
+            # Enregistre directement le texte long officiel choisi
+            att_label = st.selectbox("Niveau en Attaque", options=TEXT_OPTIONS, index=1)
+            def_label = st.selectbox("Niveau en Défense", options=TEXT_OPTIONS, index=1)
+            col_label = st.selectbox("Niveau en Collectif", options=TEXT_OPTIONS, index=2)
             
             if st.form_submit_button("Ajouter le joueur"):
                 if name.strip() and name.strip() not in st.session_state.players_df["Nom du Joueur"].values:
@@ -283,21 +291,21 @@ with tab2:
                     })
                     st.session_state.players_df = pd.concat([st.session_state.players_df, new_player], ignore_index=True)
                     save_data(st.session_state.players_df)
-                    st.success(f"✅ {name.strip()} ajouté !")
+                    st.success(f"✅ {name.strip()} ajouté avec succès dans l'Excel !")
                     st.rerun()
                 else:
-                    st.error("Nom vide ou déjà existant dans la base.")
+                    st.error("Nom vide ou déjà existant.")
                     
     st.write("---")
     st.subheader("📝 Modification et édition de l'effectif")
     
-    # Édition interactive du tableau avec listes déroulantes intégrées directement dans les cellules
+    # Le tableau affiche et permet de modifier les valeurs via des menus déroulants de textes complets
     edited_players = st.data_editor(
         st.session_state.players_df, 
         column_config={
-            "Attaque": st.column_config.SelectboxColumn("Attaque", options=list(OPTIONS_ATT.keys()), required=True),
-            "Défense": st.column_config.SelectboxColumn("Défense", options=list(OPTIONS_DEF.keys()), required=True),
-            "Collectif": st.column_config.SelectboxColumn("Collectif", options=list(OPTIONS_COL.keys()), required=True),
+            "Attaque": st.column_config.SelectboxColumn("Attaque", options=TEXT_OPTIONS, required=True),
+            "Défense": st.column_config.SelectboxColumn("Défense", options=TEXT_OPTIONS, required=True),
+            "Collectif": st.column_config.SelectboxColumn("Collectif", options=TEXT_OPTIONS, required=True),
         }, 
         hide_index=True, 
         use_container_width=True
@@ -306,5 +314,5 @@ with tab2:
     if st.button("💾 Enregistrer les modifications", type="primary"):
         st.session_state.players_df = edited_players
         save_data(edited_players)
-        st.success("✅ Base de données mise à jour avec succès !")
+        st.success("✅ Base de données Excel mise à jour (avec intitulés textes complets) !")
         st.rerun()
