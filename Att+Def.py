@@ -70,9 +70,13 @@ def save_data(df):
 if 'players_df' not in st.session_state:
     st.session_state.players_df = load_data()
 
-# Session state pour stocker les joueurs cochés automatiquement via la convocation
+# Initialisation du set de stockage des joueurs cochés via convocation
 if 'auto_selected' not in st.session_state:
     st.session_state.auto_selected = set()
+
+# Synchronisation forcée avec l'état des checkbox individuelles
+for name in st.session_state.auto_selected:
+    st.session_state[f"select_{name}"] = True
 
 # --- DESSIN DU TERRAIN ---
 def draw_combined_field(t1, t2):
@@ -171,14 +175,10 @@ with tab1:
         
         if st.button("🔍 Extraire et Valider les Joueurs"):
             if convoc_text.strip():
-                # Extraction de la ligne après "Présents :"
                 match = re.search(r"Présents\s*:\s*(.*)", convoc_text, re.IGNORECASE)
                 if match:
-                    raw_presents = match.group(1).split("\n")[0] # On prend juste la ligne
-                    # On nettoie les chiffres entre parenthèses et on découpe par virgule ou espace
-                    # Supprime les (X) ou ( XX )
+                    raw_presents = match.group(1).split("\n")[0]
                     cleaned_line = re.sub(r"\(\s*\d+\s*\)", "", raw_presents)
-                    # Découpe selon les virgules ou les espaces superflus
                     extracted_names = [n.strip() for n in re.split(r"[, ]+", cleaned_line) if n.strip()]
                     
                     db_names = st.session_state.players_df["Nom du Joueur"].values
@@ -188,7 +188,6 @@ with tab1:
                     unknown_names = []
                     
                     for name in extracted_names:
-                        # Test de correspondance (insensible à la casse)
                         if name.lower() in db_names_lower:
                             found_players.add(db_names_lower[name.lower()])
                         else:
@@ -196,11 +195,16 @@ with tab1:
                     
                     st.session_state.auto_selected = found_players
                     
+                    # On force l'activation dans le session_state des checkbox
+                    for p_name in found_players:
+                        st.session_state[f"select_{p_name}"] = True
+                    
                     if unknown_names:
                         st.warning(f"⚠️ {len(unknown_names)} joueur(s) inconnu(s) détecté(s) !")
                         st.session_state.unknown_names = unknown_names
                     else:
-                        st.success(f"✅ {len(found_players)} joueurs importés et cochés avec succès ! En avant pour les compos.")
+                        st.success(f"✅ {len(found_players)} joueurs importés et cochés avec succès !")
+                        st.rerun()
                 else:
                     st.error("Le mot 'Présents :' n'a pas été trouvé dans le texte.")
             else:
@@ -211,7 +215,6 @@ with tab1:
         st.info("💡 Résolution des joueurs inconnus :")
         db_names = sorted(list(st.session_state.players_df["Nom du Joueur"].values))
         
-        # On traite le premier joueur inconnu de la liste
         current_unknown = st.session_state.unknown_names[0]
         st.markdown(f"Le nom **{current_unknown}** n'est pas reconnu.")
         
@@ -221,6 +224,7 @@ with tab1:
             linked_name = st.selectbox("Sélectionner le vrai profil existant :", options=db_names)
             if st.button(f"Associer {current_unknown} à {linked_name}"):
                 st.session_state.auto_selected.add(linked_name)
+                st.session_state[f"select_{linked_name}"] = True # Force la coche
                 st.session_state.unknown_names.pop(0)
                 st.rerun()
         else:
@@ -232,15 +236,17 @@ with tab1:
                 
                 if st.form_submit_button("💾 Enregistrer et Cocher"):
                     if new_clean_name.strip():
+                        new_clean = new_clean_name.strip()
                         new_p = pd.DataFrame({
-                            "Nom du Joueur": [new_clean_name.strip()], 
+                            "Nom du Joueur": [new_clean], 
                             "Attaque": [att_l], "Défense": [def_l], "Collectif": [col_l]
                         })
                         st.session_state.players_df = pd.concat([st.session_state.players_df, new_p], ignore_index=True)
                         save_data(st.session_state.players_df)
-                        st.session_state.auto_selected.add(new_clean_name.strip())
+                        
+                        st.session_state.auto_selected.add(new_clean)
+                        st.session_state[f"select_{new_clean}"] = True # Force la coche
                         st.session_state.unknown_names.pop(0)
-                        st.success(f"{new_clean_name.strip()} ajouté !")
                         st.rerun()
 
     st.write("---")
@@ -250,26 +256,42 @@ with tab1:
     counter_placeholder = st.empty()
     selected_names = []
     
-    # Affichage de la grille de cases à cocher (pré-remplie si auto_selected contient le nom)
+    # Affichage de la grille de cases à cocher
     for i in range(0, len(df_sorted), 3):
         cols = st.columns(3)
+        
         row1 = df_sorted.iloc[i]
         name1 = row1["Nom du Joueur"]
-        is_checked1 = name1 in st.session_state.auto_selected
+        # Vérification si le joueur doit être coché par défaut
+        val1 = st.session_state.get(f"select_{name1}", name1 in st.session_state.auto_selected)
         with cols[0]:
-            if st.checkbox(name1, key=f"select_{name1}", value=is_checked1): selected_names.append(name1)
+            if st.checkbox(name1, key=f"select_{name1}", value=val1): 
+                selected_names.append(name1)
+                st.session_state.auto_selected.add(name1)
+            else:
+                st.session_state.auto_selected.discard(name1)
+                
         if i + 1 < len(df_sorted):
             row2 = df_sorted.iloc[i + 1]
             name2 = row2["Nom du Joueur"]
-            is_checked2 = name2 in st.session_state.auto_selected
+            val2 = st.session_state.get(f"select_{name2}", name2 in st.session_state.auto_selected)
             with cols[1]:
-                if st.checkbox(name2, key=f"select_{name2}", value=is_checked2): selected_names.append(name2)
+                if st.checkbox(name2, key=f"select_{name2}", value=val2): 
+                    selected_names.append(name2)
+                    st.session_state.auto_selected.add(name2)
+                else:
+                    st.session_state.auto_selected.discard(name2)
+                    
         if i + 2 < len(df_sorted):
             row3 = df_sorted.iloc[i + 2]
             name3 = row3["Nom du Joueur"]
-            is_checked3 = name3 in st.session_state.auto_selected
+            val3 = st.session_state.get(f"select_{name3}", name3 in st.session_state.auto_selected)
             with cols[2]:
-                if st.checkbox(name3, key=f"select_{name3}", value=is_checked3): selected_names.append(name3)
+                if st.checkbox(name3, key=f"select_{name3}", value=val3): 
+                    selected_names.append(name3)
+                    st.session_state.auto_selected.add(name3)
+                else:
+                    st.session_state.auto_selected.discard(name3)
                 
     selected_players = st.session_state.players_df[st.session_state.players_df["Nom du Joueur"].isin(selected_names)]
     nb_selected = len(selected_players)
@@ -389,4 +411,4 @@ with tab2:
         save_data(edited_players)
         st.success("✅ Fichier Excel sauvegardé avec succès !")
         st.rerun()
-                    
+    
