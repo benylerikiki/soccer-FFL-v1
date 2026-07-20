@@ -49,7 +49,7 @@ def text_to_score(text_value):
     if text_str.startswith("2"): return 2
     if text_str.startswith("3"): return 3
     if text_str.startswith("4"): return 4
-    return 2 # Valeur par défaut en cas d'anomalie
+    return 2 # Valeur par défaut
 
 # --- FICHIERS DE STOCKAGE ---
 DATA_FILE = 'database_joueurs_v2.xlsx'       
@@ -59,14 +59,12 @@ def load_data():
     if os.path.exists(DATA_FILE):
         try: 
             df = pd.read_excel(DATA_FILE)
-            # Sécurité : on s'assure que les colonnes contiennent bien un format valide
             for col in ["Attaque", "Défense", "Collectif"]:
                 df[col] = df[col].apply(lambda x: x if str(x) in TEXT_OPTIONS else TEXT_OPTIONS[1])
             return df
         except Exception: 
             pass
             
-    # Base par défaut si le fichier n'existe pas encore
     return pd.DataFrame({
         "Nom du Joueur": ["Antho", "Cyril V", "Apou", "Benoit", "Nico P", "Mouyss", "Cédric", "Nico M", "David", "Cyril L"],
         "Attaque": ["4 - Très bon", "2 - Moyennement bon", "3 - Assez bon", "4 - Très bon", "2 - Moyennement bon", "3 - Assez bon", "1 - Pas bon", "3 - Assez bon", "2 - Moyennement bon", "1 - Pas bon"],
@@ -87,20 +85,18 @@ def draw_combined_field(t1, t2):
     fig.patch.set_facecolor('#226343')
     ax.set_facecolor('#226343')
     
-    # Lignes du terrain
     ax.plot([0, 100, 100, 0, 0], [0, 0, 60, 60, 0], color='white', linewidth=2.0)
     ax.plot([50, 50], [0, 60], color='white', linewidth=2.0)
     center_circle = patches.Circle((50, 30), 9, edgecolor='white', facecolor='none', linewidth=1.5)
     ax.add_patch(center_circle)
     ax.scatter(50, 30, color='white', s=15, zorder=2)
     
-    # Surfaces
     ax.add_patch(patches.Rectangle((0, 15), 12, 30, edgecolor='white', facecolor='none', linewidth=1.5))
     ax.scatter(9, 30, color='white', s=15, zorder=2)
     ax.add_patch(patches.Rectangle((88, 15), 12, 30, edgecolor='white', facecolor='none', linewidth=1.5))
     ax.scatter(91, 30, color='white', s=15, zorder=2)
     
-    # Placement Équipe 1 (Triée par son score numérique de défense décroissant)
+    # Équipe 1
     pos1 = [(7, 30), (22, 14), (22, 46), (40, 18), (40, 42)]
     players1 = t1.copy()
     players1['Def_Num'] = players1['Défense'].apply(text_to_score)
@@ -111,7 +107,7 @@ def draw_combined_field(t1, t2):
         ax.scatter(x, y, color="#1C6CF6", s=220, edgecolors='white', linewidths=1.5, zorder=3)
         ax.text(x, y - 4.2, row['Nom du Joueur'], color='white', fontsize=11, weight='bold', ha='center', va='center', zorder=4)
         
-    # Placement Équipe 2
+    # Équipe 2
     pos2 = [(93, 30), (78, 14), (78, 46), (60, 18), (60, 42)]
     players2 = t2.copy()
     players2['Def_Num'] = players2['Défense'].apply(text_to_score)
@@ -122,7 +118,6 @@ def draw_combined_field(t1, t2):
         ax.scatter(x, y, color="#E03131", s=220, edgecolors='white', linewidths=1.5, zorder=3)
         ax.text(x, y - 4.2, row['Nom du Joueur'], color='white', fontsize=11, weight='bold', ha='center', va='center', zorder=4)
     
-    # Totaux numériques pour la légende du terrain
     t1_att = t1['Attaque'].apply(text_to_score).sum()
     t1_def = t1['Défense'].apply(text_to_score).sum()
     t1_col = t1['Collectif'].apply(text_to_score).sum()
@@ -157,7 +152,6 @@ def show_teams_popup(t1, t2):
     
     st.write("---")
     
-    # Génération du texte WhatsApp contenant UNIQUEMENT les noms des joueurs
     text_whatsapp = "⚽ *COMPOSITIONS DU MATCH* ⚽\n\n"
     text_whatsapp += "🔵 *ÉQUIPE 1* :\n"
     for _, row in t1.iterrows():
@@ -207,7 +201,7 @@ with tab1:
     nb_selected = len(selected_players)
     
     if nb_selected == 10:
-        counter_placeholder.success("✅ 10 joueurs sélectionnés ! Prêts à générer.")
+        counter_placeholder.success("✅ 10 joueurs sélectionnés ! Prêts à configurer les options.")
     elif nb_selected > 10:
         counter_placeholder.error(f"⚠️ Trop de joueurs sélectionnés ({nb_selected}/10). Veuillez en décocher {nb_selected - 10} !")
     else:
@@ -216,20 +210,40 @@ with tab1:
     st.write("---")
     
     if nb_selected == 10:
+        # 🛡️ AJOUT DE LA SÉCURITÉ / RIVALITÉ
+        st.markdown("### ⛔ Restriction d'affinité (Optionnel)")
+        
+        # Choix du joueur 1 à séparer
+        j1 = st.selectbox("Sélectionner un joueur...", options=["Aucune restriction"] + sorted(selected_names), index=0)
+        
+        # Choix du joueur 2 (on retire le joueur 1 de la liste pour éviter de se choisir soi-même)
+        remaining_options = [n for n in selected_names if n != j1] if j1 != "Aucune restriction" else []
+        j2 = st.selectbox("... à ne surtout pas faire jouer avec :", options=["Aucun"] + sorted(remaining_options), index=0) if j1 != "Aucune restriction" else "Aucun"
+        
+        st.write("")
+        
         if st.button("⚡ Générer l'Équilibrage Parfait", type="primary"):
             players_list = selected_players.to_dict(orient='records')
             best_diff = float('inf')
             best_team1, best_team2 = None, None
+            valid_combo_found = False
             
-            # Recherche combinatoire sur les 10 joueurs pour trouver les 2 équipes de 5 les plus proches
             for combo in itertools.combinations(players_list, 5):
                 t1 = list(combo)
                 t2 = [p for p in players_list if p not in t1]
                 
+                names_t1 = [p['Nom du Joueur'] for p in t1]
+                names_t2 = [p['Nom du Joueur'] for p in t2]
+                
+                # Blocage de la combinaison si j1 et j2 sont ensemble dans l'équipe 1 OU l'équipe 2
+                if j1 != "Aucune restriction" and j2 != "Aucun":
+                    if (j1 in names_t1 and j2 in names_t1) or (j1 in names_t2 and j2 in names_t2):
+                        continue # On passe à la combinaison suivante, celle-ci est interdite !
+                
+                valid_combo_found = True
                 df_t1 = pd.DataFrame(t1)
                 df_t2 = pd.DataFrame(t2)
                 
-                # Conversion numérique des critères pour l'algorithme
                 t1_att_sum = df_t1['Attaque'].apply(text_to_score).sum()
                 t1_def_sum = df_t1['Défense'].apply(text_to_score).sum()
                 t1_col_sum = df_t1['Collectif'].apply(text_to_score).sum()
@@ -249,10 +263,12 @@ with tab1:
                     best_team1 = df_t1
                     best_team2 = df_t2
             
-            st.session_state.last_team1 = best_team1
-            st.session_state.last_team2 = best_team2
-            
-            show_teams_popup(best_team1, best_team2)
+            if not valid_combo_found:
+                st.error("Impossible de générer les équipes avec cette contrainte (cela casserait la logique numérique), essayez sans restriction.")
+            else:
+                st.session_state.last_team1 = best_team1
+                st.session_state.last_team2 = best_team2
+                show_teams_popup(best_team1, best_team2)
 
     if 'last_team1' in st.session_state and 'last_team2' in st.session_state:
         st.write("---")
@@ -273,7 +289,6 @@ with tab2:
         with st.form("form_add"):
             name = st.text_input("Nom / Pseudo du joueur")
             
-            # Formulaires d'ajout utilisant la structure textuelle propre
             att_label = st.selectbox("Niveau en Attaque", options=TEXT_OPTIONS, index=1)
             def_label = st.selectbox("Niveau en Défense", options=TEXT_OPTIONS, index=1)
             col_label = st.selectbox("Niveau en Collectif", options=TEXT_OPTIONS, index=2)
@@ -296,7 +311,6 @@ with tab2:
     st.write("---")
     st.subheader("📝 Modification et édition de l'effectif")
     
-    # Éditeur interactif avec menus déroulants complets intégrés
     edited_players = st.data_editor(
         st.session_state.players_df, 
         column_config={
