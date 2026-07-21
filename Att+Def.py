@@ -10,7 +10,7 @@ import re
 # Configuration de la page Streamlit
 st.set_page_config(page_title="Soccer FFL Kompo", page_icon="⚽", layout="wide")
 
-# 📳 FORCE LE MODE GRILLE
+# 📳 FORCE LE MODE GRILLE SUR MOBILE
 st.markdown(
     """
     <style>
@@ -51,6 +51,9 @@ def load_data():
     if os.path.exists(DATA_FILE):
         try: 
             df = pd.read_excel(DATA_FILE)
+            if "Surnoms" not in df.columns:
+                df["Surnoms"] = ""
+            df["Surnoms"] = df["Surnoms"].fillna("")
             for col in ["Attaque", "Défense", "Collectif"]:
                 df[col] = df[col].apply(lambda x: x if str(x) in TEXT_OPTIONS else TEXT_OPTIONS[1])
             return df
@@ -59,6 +62,7 @@ def load_data():
             
     return pd.DataFrame({
         "Nom du Joueur": ["Antho", "Cyril V", "Apou", "Benoit", "Nico P", "Mouyss", "Cédric", "Nico M", "David", "Cyril L"],
+        "Surnoms": ["", "Cyril", "", "beny", "nicop, nico", "mouys", "", "nicom, nico", "Dav, dimeh", "Cyril"],
         "Attaque": ["4 - Très bon", "2 - Moyennement bon", "3 - Assez bon", "4 - Très bon", "2 - Moyennement bon", "3 - Assez bon", "1 - Pas bon", "3 - Assez bon", "2 - Moyennement bon", "1 - Pas bon"],
         "Défense": ["2 - Moyennement bon", "4 - Très bon", "2 - Moyennement bon", "1 - Pas bon", "4 - Très bon", "1 - Pas bon", "4 - Très bon", "2 - Moyennement bon", "3 - Assez bon", "3 - Assez bon"],
         "Collectif": ["3 - Assez bon", "4 - Très bon", "3 - Assez bon", "2 - Moyennement bon", "3 - Assez bon", "2 - Moyennement bon", "3 - Assez bon", "2 - Moyennement bon", "2 - Moyennement bon", "2 - Moyennement bon"]
@@ -70,11 +74,10 @@ def save_data(df):
 if 'players_df' not in st.session_state:
     st.session_state.players_df = load_data()
 
-# Initialisation du set de stockage des joueurs cochés via convocation
+# Initialisation des états
 if 'auto_selected' not in st.session_state:
     st.session_state.auto_selected = set()
 
-# Synchronisation forcée avec l'état des checkbox individuelles
 for name in st.session_state.auto_selected:
     st.session_state[f"select_{name}"] = True
 
@@ -181,55 +184,111 @@ with tab1:
                     cleaned_line = re.sub(r"\(\s*\d+\s*\)", "", raw_presents)
                     extracted_names = [n.strip() for n in re.split(r"[, ]+", cleaned_line) if n.strip()]
                     
-                    db_names = st.session_state.players_df["Nom du Joueur"].values
-                    db_names_lower = {name.lower(): name for name in db_names}
+                    df_db = st.session_state.players_df
+                    
+                    # Construction des cartes d'équivalence (nom ou surnom -> liste de joueurs)
+                    alias_map = {}
+                    for _, row in df_db.iterrows():
+                        real_name = row["Nom du Joueur"]
+                        # Ajout du nom réel
+                        alias_map.setdefault(real_name.lower(), []).append(real_name)
+                        # Ajout des surnoms
+                        surnoms = [s.strip().lower() for s in str(row["Surnoms"]).split(",") if s.strip()]
+                        for s in surnoms:
+                            if real_name not in alias_map.setdefault(s, []):
+                                alias_map[s].append(real_name)
                     
                     found_players = set()
                     unknown_names = []
+                    ambiguous_matches = [] # Surnoms partagés par plusieurs joueurs
                     
-                    for name in extracted_names:
-                        if name.lower() in db_names_lower:
-                            found_players.add(db_names_lower[name.lower()])
+                    for raw_name in extracted_names:
+                        key = raw_name.lower()
+                        if key in alias_map:
+                            candidates = alias_map[key]
+                            if len(candidates) == 1:
+                                found_players.add(candidates[0])
+                            else:
+                                # Garde-fou : Plusieurs personnes partagent ce surnom/prénom
+                                ambiguous_matches.append({
+                                    "convoc_name": raw_name,
+                                    "candidates": candidates
+                                })
                         else:
-                            unknown_names.append(name)
+                            unknown_names.append(raw_name)
                     
                     st.session_state.auto_selected = found_players
-                    
-                    # On force l'activation dans le session_state des checkbox
                     for p_name in found_players:
                         st.session_state[f"select_{p_name}"] = True
                     
-                    if unknown_names:
-                        st.warning(f"⚠️ {len(unknown_names)} joueur(s) inconnu(s) détecté(s) !")
-                        st.session_state.unknown_names = unknown_names
-                    else:
-                        st.success(f"✅ {len(found_players)} joueurs importés et cochés avec succès !")
+                    st.session_state.unknown_names = unknown_names
+                    st.session_state.ambiguous_matches = ambiguous_matches
+                    
+                    if not unknown_names and not ambiguous_matches:
+                        st.success(f"✅ {len(found_players)} joueurs reconnus et cochés sans ambiguïté !")
                         st.rerun()
                 else:
                     st.error("Le mot 'Présents :' n'a pas été trouvé dans le texte.")
             else:
                 st.error("Le texte est vide.")
 
-    # Formulaire dynamique si des joueurs inconnus ont été détectés
-    if 'unknown_names' in st.session_state and st.session_state.unknown_names:
-        st.info("💡 Résolution des joueurs inconnus :")
+    # --- GARDE-FOU 1 : DÉSAMBIGUÏSATION DES SURNOMS PARTAGÉS ---
+    if 'ambiguous_matches' in st.session_state and st.session_state.ambiguous_matches:
+        st.warning("⚠️ **Garde-fou : Surnom partagé par plusieurs joueurs**")
+        current_amb = st.session_state.ambiguous_matches[0]
+        convoc_n = current_amb["convoc_n" if "convoc_n" in current_amb else "convoc_name"]
+        candidates = current_amb["candidates"]
+        
+        st.markdown(f"Dans la convocation, le nom **'{convoc_n}'** peut correspondre à plusieurs joueurs de la base :")
+        selected_candidate = st.radio(
+            f"Qui est réellement '{convoc_n}' ?",
+            options=candidates,
+            key=f"amb_radio_{convoc_n}"
+        )
+        
+        if st.button(f"Confirmé : c'est {selected_candidate}"):
+            st.session_state.auto_selected.add(selected_candidate)
+            st.session_state[f"select_{selected_candidate}"] = True
+            st.session_state.ambiguous_matches.pop(0)
+            st.rerun()
+
+    # --- GARDE-FOU 2 : GESTION DES NOMS INCONNUS ---
+    if ('ambiguous_matches' not in st.session_state or not st.session_state.ambiguous_matches) and ('unknown_names' in st.session_state and st.session_state.unknown_names):
+        st.info("💡 **Résolution des joueurs inconnus :**")
         db_names = sorted(list(st.session_state.players_df["Nom du Joueur"].values))
         
         current_unknown = st.session_state.unknown_names[0]
-        st.markdown(f"Le nom **{current_unknown}** n'est pas reconnu.")
+        st.markdown(f"Le nom **'{current_unknown}'** de la convocation n'est pas reconnu.")
         
-        choice = st.radio(f"Que faire pour '{current_unknown}' ?", ["Il correspond à un joueur existant sous un autre nom", "Créer un nouveau joueur dans la base"], key=f"choice_{current_unknown}")
+        choice = st.radio(
+            f"Que faire pour '{current_unknown}' ?", 
+            ["Associer ce surnom à un joueur existant dans la BDD", "Créer un tout nouveau joueur"], 
+            key=f"choice_{current_unknown}"
+        )
         
-        if choice == "Il correspond à un joueur existant sous un autre nom":
-            linked_name = st.selectbox("Sélectionner le vrai profil existant :", options=db_names)
-            if st.button(f"Associer {current_unknown} à {linked_name}"):
+        if choice == "Associer ce surnom à un joueur existant dans la BDD":
+            linked_name = st.selectbox("Sélectionner le profil existant :", options=db_names)
+            if st.button(f"Associer '{current_unknown}' comme surnom de {linked_name}"):
+                # Ajout du nouveau surnom dans le DataFrame
+                idx = st.session_state.players_df[st.session_state.players_df["Nom du Joueur"] == linked_name].index[0]
+                existing_surnames = str(st.session_state.players_df.loc[idx, "Surnoms"]).strip()
+                
+                if existing_surnames:
+                    updated_surnames = f"{existing_surnames}, {current_unknown}"
+                else:
+                    updated_surnames = current_unknown
+                    
+                st.session_state.players_df.loc[idx, "Surnoms"] = updated_surnames
+                save_data(st.session_state.players_df)
+                
                 st.session_state.auto_selected.add(linked_name)
-                st.session_state[f"select_{linked_name}"] = True # Force la coche
+                st.session_state[f"select_{linked_name}"] = True
                 st.session_state.unknown_names.pop(0)
+                st.success(f"Surnom '{current_unknown}' enregistré pour {linked_name} !")
                 st.rerun()
         else:
             with st.form(f"form_quick_add_{current_unknown}"):
-                new_clean_name = st.text_input("Nom définitif pour la base", value=current_unknown)
+                new_clean_name = st.text_input("Nom officiel pour la BDD", value=current_unknown)
                 att_l = st.selectbox("Attaque", options=TEXT_OPTIONS, index=1)
                 def_l = st.selectbox("Défense", options=TEXT_OPTIONS, index=1)
                 col_l = st.selectbox("Collectif", options=TEXT_OPTIONS, index=2)
@@ -239,13 +298,14 @@ with tab1:
                         new_clean = new_clean_name.strip()
                         new_p = pd.DataFrame({
                             "Nom du Joueur": [new_clean], 
+                            "Surnoms": [current_unknown if new_clean != current_unknown else ""],
                             "Attaque": [att_l], "Défense": [def_l], "Collectif": [col_l]
                         })
                         st.session_state.players_df = pd.concat([st.session_state.players_df, new_p], ignore_index=True)
                         save_data(st.session_state.players_df)
                         
                         st.session_state.auto_selected.add(new_clean)
-                        st.session_state[f"select_{new_clean}"] = True # Force la coche
+                        st.session_state[f"select_{new_clean}"] = True
                         st.session_state.unknown_names.pop(0)
                         st.rerun()
 
@@ -262,7 +322,6 @@ with tab1:
         
         row1 = df_sorted.iloc[i]
         name1 = row1["Nom du Joueur"]
-        # Vérification si le joueur doit être coché par défaut
         val1 = st.session_state.get(f"select_{name1}", name1 in st.session_state.auto_selected)
         with cols[0]:
             if st.checkbox(name1, key=f"select_{name1}", value=val1): 
@@ -376,6 +435,7 @@ with tab2:
     with st.expander("➕ Ajouter manuellement un nouveau joueur"):
         with st.form("form_add"):
             name = st.text_input("Nom / Pseudo du joueur")
+            surnames = st.text_input("Surnoms séparés par des virgules (Optionnel)", placeholder="ex: Nico, Nick")
             att_label = st.selectbox("Niveau en Attaque", options=TEXT_OPTIONS, index=1)
             def_label = st.selectbox("Niveau en Défense", options=TEXT_OPTIONS, index=1)
             col_label = st.selectbox("Niveau en Collectif", options=TEXT_OPTIONS, index=2)
@@ -383,7 +443,9 @@ with tab2:
             if st.form_submit_button("Ajouter le joueur"):
                 if name.strip() and name.strip() not in st.session_state.players_df["Nom du Joueur"].values:
                     new_player = pd.DataFrame({
-                        "Nom du Joueur": [name.strip()], "Attaque": [att_label], "Défense": [def_label], "Collectif": [col_label]
+                        "Nom du Joueur": [name.strip()], 
+                        "Surnoms": [surnames.strip()],
+                        "Attaque": [att_label], "Défense": [def_label], "Collectif": [col_label]
                     })
                     st.session_state.players_df = pd.concat([st.session_state.players_df, new_player], ignore_index=True)
                     save_data(st.session_state.players_df)
@@ -398,6 +460,8 @@ with tab2:
     edited_players = st.data_editor(
         st.session_state.players_df, 
         column_config={
+            "Nom du Joueur": st.column_config.TextColumn("Nom du Joueur", required=True),
+            "Surnoms": st.column_config.TextColumn("Surnoms (séparés par des virgules)", help="Ex: Nico, Nick, Ptit Nico"),
             "Attaque": st.column_config.SelectboxColumn("Attaque", options=TEXT_OPTIONS, required=True),
             "Défense": st.column_config.SelectboxColumn("Défense", options=TEXT_OPTIONS, required=True),
             "Collectif": st.column_config.SelectboxColumn("Collectif", options=TEXT_OPTIONS, required=True),
@@ -411,4 +475,3 @@ with tab2:
         save_data(edited_players)
         st.success("✅ Fichier Excel sauvegardé avec succès !")
         st.rerun()
-    
