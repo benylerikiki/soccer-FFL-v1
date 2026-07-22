@@ -9,7 +9,7 @@ import itertools
 import re
 
 # Configuration de la page Streamlit
-st.set_page_config(page_title="Soccer FFL Kompo", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="Soccer FFL Kompo", page_icon="icon_ffl.png", layout="wide")
 
 # 📳 FORCE LE MODE GRILLE SUR MOBILE
 st.markdown(
