@@ -99,6 +99,7 @@ def load_data():
     })
 
 def save_data(df):
+    # Garantit que 'Note Globale' si présente n'est jamais sauvegardée dans le fichier Excel
     clean_df = df.copy()
     if "Note Globale" in clean_df.columns:
         clean_df = clean_df.drop(columns=["Note Globale"])
@@ -448,6 +449,4 @@ with tab1:
                 df_t1 = pd.DataFrame(t1)
                 df_t2 = pd.DataFrame(t2)
                 
-                t1_att_sum = df_t1['Attaque'].apply(text_to_score).sum()
-                t1_def_sum = df_t1['Défense'].apply(text_to_score).sum()
-       
+                t1_att_sum = df_t1['Attaque'].apply(text_to_
