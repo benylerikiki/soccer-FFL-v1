@@ -112,8 +112,8 @@ def create_player_card(card_path, player_name):
     
     y_pos = int(h * (2 / 3))
     
-    # POLICE AGRANDIE ICI (15% au lieu de 12%)
-    font_size = max(20, int(w * 0.15))
+    # POLICE AGRANDIE (18% de la largeur de la carte, min 24px)
+    font_size = max(24, int(w * 0.18))
     try:
         font = ImageFont.truetype(FONT_PATH, font_size)
     except Exception:
@@ -126,22 +126,14 @@ def create_player_card(card_path, player_name):
     x_pos = (w - text_w) / 2
     y_pos_centered = y_pos - (text_h / 2)
     
-    stroke_w = max(1, int(font_size * 0.06))
+    stroke_w = max(2, int(font_size * 0.07))
     draw.text((x_pos, y_pos_centered), player_name.upper(), fill="white", font=font, stroke_width=stroke_w, stroke_fill="black")
     
     return card_img
 
-# --- FONCTION UTILITAIRE POUR LES BARRES DE PROGRESSION ---
-def make_progress_bar(val, max_val=50, length=8):
-    """ Génère une barre de progression sous forme de blocs ascii """
-    ratio = min(1.0, max(0.0, val / max_val))
-    filled_len = int(round(length * ratio))
-    bar = '█' * filled_len + '░' * (length - filled_len)
-    return bar
-
 # --- DESSIN DU TERRAIN ---
 def draw_combined_field(t1, t2):
-    fig, ax = plt.subplots(figsize=(10, 6.8))
+    fig, ax = plt.subplots(figsize=(10, 6.5))
     fig.patch.set_facecolor('#226343')
     ax.set_facecolor('#226343')
     
@@ -157,11 +149,12 @@ def draw_combined_field(t1, t2):
     ax.add_patch(patches.Rectangle((88, 15), 12, 30, edgecolor='white', facecolor='none', linewidth=1.5))
     ax.scatter(91, 30, color='white', s=15, zorder=2)
     
-    card_width = 11.0
-    card_height = 15.0
+    # DIMENSIONS DES CARTES AGRANDIES (13.5 x 18.0 au lieu de 11.0 x 15.0)
+    card_width = 13.5
+    card_height = 18.0
     
-    # Équipe 1 (Bleu)
-    pos1 = [(6, 30), (22, 14), (22, 46), (40, 18), (40, 42)]
+    # Équipe 1 (Bleu) - Positions légèrement réajustées pour la taille des cartes
+    pos1 = [(7, 30), (23, 13), (23, 47), (40, 17), (40, 43)]
     players1 = t1.copy()
     players1['Gk_Num'] = players1['Gardien'].apply(text_to_score)
     players1 = players1.sort_values(by="Gk_Num", ascending=False).reset_index(drop=True)
@@ -175,11 +168,11 @@ def draw_combined_field(t1, t2):
         if card_img:
             ax.imshow(card_img, extent=[x - card_width/2, x + card_width/2, y - card_height/2, y + card_height/2], zorder=3)
         else:
-            ax.scatter(x, y, color="#1C6CF6", s=250, edgecolors='white', linewidths=1.5, zorder=3)
-            ax.text(x, y - 4.5, p_name, color='white', fontsize=11, weight='bold', ha='center', va='center', zorder=4)
+            ax.scatter(x, y, color="#1C6CF6", s=350, edgecolors='white', linewidths=2.0, zorder=3)
+            ax.text(x, y - 5.5, p_name, color='white', fontsize=12, weight='bold', ha='center', va='center', zorder=4)
         
-    # Équipe 2 (Rouge)
-    pos2 = [(94, 30), (78, 14), (78, 46), (60, 18), (60, 42)]
+    # Équipe 2 (Rouge) - Positions légèrement réajustées pour la taille des cartes
+    pos2 = [(93, 30), (77, 13), (77, 47), (60, 17), (60, 43)]
     players2 = t2.copy()
     players2['Gk_Num'] = players2['Gardien'].apply(text_to_score)
     players2 = players2.sort_values(by="Gk_Num", ascending=False).reset_index(drop=True)
@@ -193,33 +186,15 @@ def draw_combined_field(t1, t2):
         if card_img:
             ax.imshow(card_img, extent=[x - card_width/2, x + card_width/2, y - card_height/2, y + card_height/2], zorder=3)
         else:
-            ax.scatter(x, y, color="#E03131", s=250, edgecolors='white', linewidths=1.5, zorder=3)
-            ax.text(x, y - 4.5, p_name, color='white', fontsize=11, weight='bold', ha='center', va='center', zorder=4)
+            ax.scatter(x, y, color="#E03131", s=350, edgecolors='white', linewidths=2.0, zorder=3)
+            ax.text(x, y - 5.5, p_name, color='white', fontsize=12, weight='bold', ha='center', va='center', zorder=4)
     
-    # Calcul des totaux par stat
-    t1_att = t1['Attaque'].apply(text_to_score).sum()
-    t1_def = t1['Défense'].apply(text_to_score).sum()
-    t1_gk  = t1['Gardien'].apply(text_to_score).sum()
-    t1_col = t1['Collectif'].apply(text_to_score).sum()
-    
-    t2_att = t2['Attaque'].apply(text_to_score).sum()
-    t2_def = t2['Défense'].apply(text_to_score).sum()
-    t2_gk  = t2['Gardien'].apply(text_to_score).sum()
-    t2_col = t2['Collectif'].apply(text_to_score).sum()
-    
-    # TITRES EN BLANC ET PLUS GRANDS
-    ax.text(25, 65, "ÉQUIPE 1", color='white', fontsize=15, weight='bold', ha='center', va='center')
-    ax.text(75, 65, "ÉQUIPE 2", color='white', fontsize=15, weight='bold', ha='center', va='center')
-    
-    # STATS EN BARRES DE PROGRESSION ASCII
-    stats_t1_str = f"ATT  {make_progress_bar(t1_att)} ({t1_att})\nDEF  {make_progress_bar(t1_def)} ({t1_def})\nGAR  {make_progress_bar(t1_gk)} ({t1_gk})\nCOL  {make_progress_bar(t1_col)} ({t1_col})"
-    stats_t2_str = f"ATT  {make_progress_bar(t2_att)} ({t2_att})\nDEF  {make_progress_bar(t2_def)} ({t2_def})\nGAR  {make_progress_bar(t2_gk)} ({t2_gk})\nCOL  {make_progress_bar(t2_col)} ({t2_col})"
-    
-    ax.text(25, -4, stats_t1_str, color='#8EC5FC', fontsize=8.5, family='monospace', weight='bold', ha='center', va='top')
-    ax.text(75, -4, stats_t2_str, color='#FF9A9E', fontsize=8.5, family='monospace', weight='bold', ha='center', va='top')
+    # TITRES D'ÉQUIPES EN BLANC ET EN GRAND (AUCUNE STATS AFFICHÉE SUR LE TERRAIN)
+    ax.text(25, 64, "ÉQUIPE 1", color='white', fontsize=16, weight='bold', ha='center', va='center')
+    ax.text(75, 64, "ÉQUIPE 2", color='white', fontsize=16, weight='bold', ha='center', va='center')
     
     ax.set_xlim(-6, 106)
-    ax.set_ylim(-12, 69)
+    ax.set_ylim(-4, 68)
     ax.axis('off')
     plt.tight_layout()
     return fig
@@ -496,7 +471,6 @@ with tab1:
         st.write("---")
         st.markdown("### 📊 Dernières équipes générées")
         
-        # Affichage avec barres de progression Streamlit dans le tableau recap
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**🔵 Équipe 1**")
