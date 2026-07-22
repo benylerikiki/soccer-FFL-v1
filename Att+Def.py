@@ -62,6 +62,15 @@ def format_star_option(val):
     score = text_to_score(val)
     return f"{score} ⭐"
 
+def calculate_global_score(row):
+    """ Calcule la moyenne des 4 compétences et renvoie une chaîne formatée """
+    att = text_to_score(row.get("Attaque", 5))
+    defe = text_to_score(row.get("Défense", 5))
+    gk = text_to_score(row.get("Gardien", 5))
+    col = text_to_score(row.get("Collectif", 5))
+    avg = (att + defe + gk + col) / 4.0
+    return f"{avg:.1f} ⭐"
+
 def load_data():
     if os.path.exists(DATA_FILE):
         try: 
@@ -90,10 +99,15 @@ def load_data():
     })
 
 def save_data(df):
+    # Garantit que 'Note Globale' si présente n'est jamais sauvegardée dans le fichier Excel
+    clean_df = df.copy()
+    if "Note Globale" in clean_df.columns:
+        clean_df = clean_df.drop(columns=["Note Globale"])
+        
     for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
-        if col in df.columns:
-            df[col] = df[col].apply(format_star_option)
-    df.to_excel(DATA_FILE, index=False)
+        if col in clean_df.columns:
+            clean_df[col] = clean_df[col].apply(format_star_option)
+    clean_df.to_excel(DATA_FILE, index=False)
 
 if 'players_df' not in st.session_state:
     st.session_state.players_df = load_data()
@@ -112,7 +126,6 @@ def create_player_card(card_path, player_name):
     
     y_pos = int(h * (2 / 3))
     
-    # POLICE AGRANDIE (18% de la largeur de la carte, min 24px)
     font_size = max(24, int(w * 0.18))
     try:
         font = ImageFont.truetype(FONT_PATH, font_size)
@@ -149,11 +162,10 @@ def draw_combined_field(t1, t2):
     ax.add_patch(patches.Rectangle((88, 15), 12, 30, edgecolor='white', facecolor='none', linewidth=1.5))
     ax.scatter(91, 30, color='white', s=15, zorder=2)
     
-    # DIMENSIONS DES CARTES AGRANDIES (13.5 x 18.0 au lieu de 11.0 x 15.0)
     card_width = 13.5
     card_height = 18.0
     
-    # Équipe 1 (Bleu) - Positions légèrement réajustées pour la taille des cartes
+    # Équipe 1 (Bleu)
     pos1 = [(7, 30), (23, 13), (23, 47), (40, 17), (40, 43)]
     players1 = t1.copy()
     players1['Gk_Num'] = players1['Gardien'].apply(text_to_score)
@@ -171,7 +183,7 @@ def draw_combined_field(t1, t2):
             ax.scatter(x, y, color="#1C6CF6", s=350, edgecolors='white', linewidths=2.0, zorder=3)
             ax.text(x, y - 5.5, p_name, color='white', fontsize=12, weight='bold', ha='center', va='center', zorder=4)
         
-    # Équipe 2 (Rouge) - Positions légèrement réajustées pour la taille des cartes
+    # Équipe 2 (Rouge)
     pos2 = [(93, 30), (77, 13), (77, 47), (60, 17), (60, 43)]
     players2 = t2.copy()
     players2['Gk_Num'] = players2['Gardien'].apply(text_to_score)
@@ -189,7 +201,6 @@ def draw_combined_field(t1, t2):
             ax.scatter(x, y, color="#E03131", s=350, edgecolors='white', linewidths=2.0, zorder=3)
             ax.text(x, y - 5.5, p_name, color='white', fontsize=12, weight='bold', ha='center', va='center', zorder=4)
     
-    # TITRES D'ÉQUIPES EN BLANC ET EN GRAND (AUCUNE STATS AFFICHÉE SUR LE TERRAIN)
     ax.text(25, 64, "ÉQUIPE 1", color='white', fontsize=16, weight='bold', ha='center', va='center')
     ax.text(75, 64, "ÉQUIPE 2", color='white', fontsize=16, weight='bold', ha='center', va='center')
     
@@ -474,7 +485,9 @@ with tab1:
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**🔵 Équipe 1**")
-            st.dataframe(st.session_state.last_team1[["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif"]], hide_index=True)
+            t1_display = st.session_state.last_team1.copy()
+            t1_display["Note Globale"] = t1_display.apply(calculate_global_score, axis=1)
+            st.dataframe(t1_display[["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif", "Note Globale"]], hide_index=True)
             
             t1 = st.session_state.last_team1
             att1 = t1['Attaque'].apply(text_to_score).sum()
@@ -493,7 +506,9 @@ with tab1:
 
         with c2:
             st.markdown("**🔴 Équipe 2**")
-            st.dataframe(st.session_state.last_team2[["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif"]], hide_index=True)
+            t2_display = st.session_state.last_team2.copy()
+            t2_display["Note Globale"] = t2_display.apply(calculate_global_score, axis=1)
+            st.dataframe(t2_display[["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif", "Note Globale"]], hide_index=True)
             
             t2 = st.session_state.last_team2
             att2 = t2['Attaque'].apply(text_to_score).sum()
@@ -543,6 +558,9 @@ with tab2:
     for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
         df_to_edit[col] = df_to_edit[col].apply(format_star_option)
 
+    # Ajout de la colonne informatique informative Note Globale
+    df_to_edit["Note Globale"] = df_to_edit.apply(calculate_global_score, axis=1)
+
     edited_players = st.data_editor(
         df_to_edit, 
         column_config={
@@ -552,6 +570,7 @@ with tab2:
             "Défense": st.column_config.SelectboxColumn("Défense", options=TEXT_OPTIONS, required=True),
             "Gardien": st.column_config.SelectboxColumn("Gardien", options=TEXT_OPTIONS, required=True),
             "Collectif": st.column_config.SelectboxColumn("Collectif", options=TEXT_OPTIONS, required=True),
+            "Note Globale": st.column_config.TextColumn("Note Globale (Moyenne)", help="Calculé automatiquement", disabled=True),
         }, 
         hide_index=True, 
         use_container_width=True
@@ -571,7 +590,13 @@ with tab2:
     with col_dl:
         st.markdown("**1. Télécharger la BDD actuelle**")
         excel_buffer = io.BytesIO()
-        st.session_state.players_df.to_excel(excel_buffer, index=False)
+        
+        # On s'assure d'exporter un fichier Excel propre sans la colonne informative
+        export_df = st.session_state.players_df.copy()
+        if "Note Globale" in export_df.columns:
+            export_df = export_df.drop(columns=["Note Globale"])
+            
+        export_df.to_excel(excel_buffer, index=False)
         excel_buffer.seek(0)
         
         st.download_button(
@@ -593,6 +618,9 @@ with tab2:
                         new_df["Surnoms"] = ""
                     new_df["Surnoms"] = new_df["Surnoms"].fillna("")
                     
+                    if "Note Globale" in new_df.columns:
+                        new_df = new_df.drop(columns=["Note Globale"])
+                        
                     for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
                         new_df[col] = new_df[col].apply(format_star_option)
                         
