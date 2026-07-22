@@ -86,12 +86,9 @@ def save_data(df):
 if 'players_df' not in st.session_state:
     st.session_state.players_df = load_data()
 
-# Initialisation des états
+# Initialisation de l'ensemble des joueurs sélectionnés
 if 'auto_selected' not in st.session_state:
     st.session_state.auto_selected = set()
-
-for name in st.session_state.auto_selected:
-    st.session_state[f"select_{name}"] = True
 
 # --- GÉNÉRATION DES CARTES JOUEURS ---
 def create_player_card(card_path, player_name):
@@ -144,7 +141,7 @@ def draw_combined_field(t1, t2):
     card_width = 11.0
     card_height = 15.0
     
-    # Équipe 1 (Bleu) - Le meilleur gardien est placé au cage (pos1[0])
+    # Équipe 1 (Bleu)
     pos1 = [(6, 30), (22, 14), (22, 46), (40, 18), (40, 42)]
     players1 = t1.copy()
     players1['Gk_Num'] = players1['Gardien'].apply(text_to_score)
@@ -162,7 +159,7 @@ def draw_combined_field(t1, t2):
             ax.scatter(x, y, color="#1C6CF6", s=250, edgecolors='white', linewidths=1.5, zorder=3)
             ax.text(x, y - 4.5, p_name, color='white', fontsize=10, weight='bold', ha='center', va='center', zorder=4)
         
-    # Équipe 2 (Rouge) - Le meilleur gardien est placé au cage (pos2[0])
+    # Équipe 2 (Rouge)
     pos2 = [(94, 30), (78, 14), (78, 46), (60, 18), (60, 42)]
     players2 = t2.copy()
     players2['Gk_Num'] = players2['Gardien'].apply(text_to_score)
@@ -283,9 +280,6 @@ with tab1:
                             unknown_names.append(raw_name)
                     
                     st.session_state.auto_selected = found_players
-                    for p_name in found_players:
-                        st.session_state[f"select_{p_name}"] = True
-                    
                     st.session_state.unknown_names = unknown_names
                     st.session_state.ambiguous_matches = ambiguous_matches
                     
@@ -313,7 +307,6 @@ with tab1:
         
         if st.button(f"Confirmé : c'est {selected_candidate}"):
             st.session_state.auto_selected.add(selected_candidate)
-            st.session_state[f"select_{selected_candidate}"] = True
             st.session_state.ambiguous_matches.pop(0)
             st.rerun()
 
@@ -346,7 +339,6 @@ with tab1:
                 save_data(st.session_state.players_df)
                 
                 st.session_state.auto_selected.add(linked_name)
-                st.session_state[f"select_{linked_name}"] = True
                 st.session_state.unknown_names.pop(0)
                 st.success(f"Surnom '{current_unknown}' enregistré pour {linked_name} !")
                 st.rerun()
@@ -370,7 +362,6 @@ with tab1:
                         save_data(st.session_state.players_df)
                         
                         st.session_state.auto_selected.add(new_clean)
-                        st.session_state[f"select_{new_clean}"] = True
                         st.session_state.unknown_names.pop(0)
                         st.rerun()
 
@@ -381,37 +372,40 @@ with tab1:
     counter_placeholder = st.empty()
     selected_names = []
     
-    # Affichage de la grille de cases à cocher
+    # Affichage sécurisé de la grille de cases à cocher avec clé unique (nom + index)
     for i in range(0, len(df_sorted), 3):
         cols = st.columns(3)
         
+        # Colonne 1
         row1 = df_sorted.iloc[i]
         name1 = row1["Nom du Joueur"]
-        val1 = st.session_state.get(f"select_{name1}", name1 in st.session_state.auto_selected)
+        is_checked1 = name1 in st.session_state.auto_selected
         with cols[0]:
-            if st.checkbox(name1, key=f"select_{name1}", value=val1): 
+            if st.checkbox(name1, key=f"chk_{name1}_{i}", value=is_checked1): 
                 selected_names.append(name1)
                 st.session_state.auto_selected.add(name1)
             else:
                 st.session_state.auto_selected.discard(name1)
                 
+        # Colonne 2
         if i + 1 < len(df_sorted):
             row2 = df_sorted.iloc[i + 1]
             name2 = row2["Nom du Joueur"]
-            val2 = st.session_state.get(f"select_{name2}", name2 in st.session_state.auto_selected)
+            is_checked2 = name2 in st.session_state.auto_selected
             with cols[1]:
-                if st.checkbox(name2, key=f"select_{name2}", value=val2): 
+                if st.checkbox(name2, key=f"chk_{name2}_{i+1}", value=is_checked2): 
                     selected_names.append(name2)
                     st.session_state.auto_selected.add(name2)
                 else:
                     st.session_state.auto_selected.discard(name2)
                     
+        # Colonne 3
         if i + 2 < len(df_sorted):
             row3 = df_sorted.iloc[i + 2]
             name3 = row3["Nom du Joueur"]
-            val3 = st.session_state.get(f"select_{name3}", name3 in st.session_state.auto_selected)
+            is_checked3 = name3 in st.session_state.auto_selected
             with cols[2]:
-                if st.checkbox(name3, key=f"select_{name3}", value=val3): 
+                if st.checkbox(name3, key=f"chk_{name3}_{i+2}", value=is_checked3): 
                     selected_names.append(name3)
                     st.session_state.auto_selected.add(name3)
                 else:
