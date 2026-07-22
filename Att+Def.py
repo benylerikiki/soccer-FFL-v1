@@ -44,16 +44,23 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# 🌟 NOUVEAU SYSTÈME DE NOTATION SUR 10 ÉTOILES
+# 🌟 SYSTÈME DE NOTATION SUR 10 ÉTOILES
 TEXT_OPTIONS = [f"{i} ⭐" for i in range(1, 11)]
 
 def text_to_score(text_value):
-    """ Extrait la valeur numérique (1 à 10) depuis la chaîne de texte """
+    """ Extrait la valeur numérique (1 à 10) depuis n'importe quelle valeur """
+    if pd.isna(text_value):
+        return 5
     match = re.search(r'\d+', str(text_value))
     if match:
         val = int(match.group())
         return max(1, min(10, val))
     return 5
+
+def format_star_option(val):
+    """ Force la valeur à correspondre exactement à une entrée de TEXT_OPTIONS """
+    score = text_to_score(val)
+    return f"{score} ⭐"
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -65,9 +72,11 @@ def load_data():
                 df["Gardien"] = "5 ⭐"
                 
             df["Surnoms"] = df["Surnoms"].fillna("")
+            
+            # Normalise et garantit le formatage exact pour le data_editor
             for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
                 if col in df.columns:
-                    df[col] = df[col].apply(lambda x: x if str(x) in TEXT_OPTIONS else f"{text_to_score(x)} ⭐")
+                    df[col] = df[col].apply(format_star_option)
             return df
         except Exception: 
             pass
@@ -82,6 +91,10 @@ def load_data():
     })
 
 def save_data(df):
+    # Formate avant enregistrement
+    for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
+        if col in df.columns:
+            df[col] = df[col].apply(format_star_option)
     df.to_excel(DATA_FILE, index=False)
 
 if 'players_df' not in st.session_state:
@@ -373,7 +386,7 @@ with tab1:
     counter_placeholder = st.empty()
     selected_names = []
     
-    # Affichage sécurisé de la grille de cases à cocher avec clé unique (nom + index)
+    # Affichage sécurisé de la grille de cases à cocher avec clé unique
     for i in range(0, len(df_sorted), 3):
         cols = st.columns(3)
         
@@ -522,8 +535,13 @@ with tab2:
     st.write("---")
     st.subheader("📝 Modification et édition directe de l'effectif")
     
+    # Nettoyage à la volée pour s'assurer du format des options Selectbox
+    df_to_edit = st.session_state.players_df.copy()
+    for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
+        df_to_edit[col] = df_to_edit[col].apply(format_star_option)
+
     edited_players = st.data_editor(
-        st.session_state.players_df, 
+        df_to_edit, 
         column_config={
             "Nom du Joueur": st.column_config.TextColumn("Nom du Joueur", required=True),
             "Surnoms": st.column_config.TextColumn("Surnoms (séparés par des virgules)", help="Ex: Nico, Nick, Ptit Nico"),
@@ -573,6 +591,9 @@ with tab2:
                         new_df["Surnoms"] = ""
                     new_df["Surnoms"] = new_df["Surnoms"].fillna("")
                     
+                    for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
+                        new_df[col] = new_df[col].apply(format_star_option)
+                        
                     st.session_state.players_df = new_df
                     save_data(new_df)
                     st.success("✅ Base de données mise à jour avec succès depuis le fichier téléversé !")
