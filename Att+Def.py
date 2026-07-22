@@ -99,7 +99,6 @@ def load_data():
     })
 
 def save_data(df):
-    # Garantit que 'Note Globale' si présente n'est jamais sauvegardée dans le fichier Excel
     clean_df = df.copy()
     if "Note Globale" in clean_df.columns:
         clean_df = clean_df.drop(columns=["Note Globale"])
@@ -449,4 +448,208 @@ with tab1:
                 df_t1 = pd.DataFrame(t1)
                 df_t2 = pd.DataFrame(t2)
                 
-                t1_att_sum = df_t1['Attaque'].apply(text_to_
+                t1_att_sum = df_t1['Attaque'].apply(text_to_score).sum()
+                t1_def_sum = df_t1['Défense'].apply(text_to_score).sum()
+                t1_gk_sum  = df_t1['Gardien'].apply(text_to_score).sum()
+                t1_col_sum = df_t1['Collectif'].apply(text_to_score).sum()
+                
+                t2_att_sum = df_t2['Attaque'].apply(text_to_score).sum()
+                t2_def_sum = df_t2['Défense'].apply(text_to_score).sum()
+                t2_gk_sum  = df_t2['Gardien'].apply(text_to_score).sum()
+                t2_col_sum = df_t2['Collectif'].apply(text_to_score).sum()
+                
+                diff_att = abs(t1_att_sum - t2_att_sum)
+                diff_def = abs(t1_def_sum - t2_def_sum)
+                diff_gk  = abs(t1_gk_sum - t2_gk_sum)
+                diff_col = abs(t1_col_sum - t2_col_sum)
+                
+                total_diff = diff_att + diff_def + diff_gk + diff_col
+                
+                if total_diff < best_diff:
+                    best_diff = total_diff
+                    best_team1 = df_t1
+                    best_team2 = df_t2
+            
+            if not valid_combo_found:
+                st.error("Impossible de générer les équipes avec cette contrainte.")
+            else:
+                st.session_state.last_team1 = best_team1
+                st.session_state.last_team2 = best_team2
+                show_teams_popup(best_team1, best_team2)
+
+    if 'last_team1' in st.session_state and 'last_team2' in st.session_state:
+        st.write("---")
+        st.markdown("### 📊 Dernières équipes générées")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**🔵 Équipe 1**")
+            t1_display = st.session_state.last_team1.copy()
+            t1_display["Note Globale"] = t1_display.apply(calculate_global_score, axis=1)
+            st.dataframe(t1_display[["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif", "Note Globale"]], hide_index=True)
+            
+            t1 = st.session_state.last_team1
+            att1 = t1['Attaque'].apply(text_to_score).sum()
+            def1 = t1['Défense'].apply(text_to_score).sum()
+            gk1  = t1['Gardien'].apply(text_to_score).sum()
+            col1 = t1['Collectif'].apply(text_to_score).sum()
+            
+            st.caption(f"Attaque ({att1}/50)")
+            st.progress(att1 / 50)
+            st.caption(f"Défense ({def1}/50)")
+            st.progress(def1 / 50)
+            st.caption(f"Gardien ({gk1}/50)")
+            st.progress(gk1 / 50)
+            st.caption(f"Collectif ({col1}/50)")
+            st.progress(col1 / 50)
+
+        with c2:
+            st.markdown("**🔴 Équipe 2**")
+            t2_display = st.session_state.last_team2.copy()
+            t2_display["Note Globale"] = t2_display.apply(calculate_global_score, axis=1)
+            st.dataframe(t2_display[["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif", "Note Globale"]], hide_index=True)
+            
+            t2 = st.session_state.last_team2
+            att2 = t2['Attaque'].apply(text_to_score).sum()
+            def2 = t2['Défense'].apply(text_to_score).sum()
+            gk2  = t2['Gardien'].apply(text_to_score).sum()
+            col2 = t2['Collectif'].apply(text_to_score).sum()
+            
+            st.caption(f"Attaque ({att2}/50)")
+            st.progress(att2 / 50)
+            st.caption(f"Défense ({def2}/50)")
+            st.progress(def2 / 50)
+            st.caption(f"Gardien ({gk2}/50)")
+            st.progress(gk2 / 50)
+            st.caption(f"Collectif ({col2}/50)")
+            st.progress(col2 / 50)
+
+with tab2:
+    st.header("Gestion de la base des joueurs")
+    
+    col_add, col_del = st.columns(2)
+    
+    with col_add:
+        with st.expander("➕ Ajouter un nouveau joueur"):
+            with st.form("form_add"):
+                name = st.text_input("Nom / Pseudo du joueur")
+                surnames = st.text_input("Surnoms séparés par des virgules (Optionnel)", placeholder="ex: Nico, Nick")
+                att_label = st.selectbox("Niveau en Attaque", options=TEXT_OPTIONS, index=4)
+                def_label = st.selectbox("Niveau en Défense", options=TEXT_OPTIONS, index=4)
+                gk_label  = st.selectbox("Niveau en Gardien", options=TEXT_OPTIONS, index=4)
+                col_label = st.selectbox("Niveau en Collectif", options=TEXT_OPTIONS, index=4)
+                
+                if st.form_submit_button("Ajouter le joueur"):
+                    if name.strip() and name.strip() not in st.session_state.players_df["Nom du Joueur"].values:
+                        new_player = pd.DataFrame({
+                            "Nom du Joueur": [name.strip()], 
+                            "Surnoms": [surnames.strip()],
+                            "Attaque": [att_label], "Défense": [def_label], "Gardien": [gk_label], "Collectif": [col_label]
+                        })
+                        st.session_state.players_df = pd.concat([st.session_state.players_df, new_player], ignore_index=True)
+                        save_data(st.session_state.players_df)
+                        st.success(f"✅ {name.strip()} ajouté dans la base Excel !")
+                        st.rerun()
+                    else:
+                        st.error("Le nom est vide ou existe déjà.")
+
+    with col_del:
+        with st.expander("🗑️ Supprimer un joueur de la BDD"):
+            all_players = sorted(list(st.session_state.players_df["Nom du Joueur"].values))
+            if all_players:
+                player_to_delete = st.selectbox("Sélectionner le joueur à supprimer :", options=all_players)
+                if st.button("🗑️ Supprimer définitivement", type="secondary"):
+                    st.session_state.players_df = st.session_state.players_df[st.session_state.players_df["Nom du Joueur"] != player_to_delete].reset_index(drop=True)
+                    save_data(st.session_state.players_df)
+                    st.session_state.auto_selected.discard(player_to_delete)
+                    st.success(f"✅ {player_to_delete} a été supprimé de la base Excel !")
+                    st.rerun()
+            else:
+                st.info("Aucun joueur dans la base.")
+                    
+    st.write("---")
+    st.subheader("📝 Modification et édition directe de l'effectif")
+    
+    # Préparation propre des données éditables
+    df_to_edit = st.session_state.players_df.copy()
+    if "Note Globale" in df_to_edit.columns:
+        df_to_edit = df_to_edit.drop(columns=["Note Globale"])
+
+    for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
+        df_to_edit[col] = df_to_edit[col].apply(format_star_option)
+
+    edited_players = st.data_editor(
+        df_to_edit, 
+        column_config={
+            "Nom du Joueur": st.column_config.TextColumn("Nom du Joueur", required=True),
+            "Surnoms": st.column_config.TextColumn("Surnoms (séparés par des virgules)", help="Ex: Nico, Nick, Ptit Nico"),
+            "Attaque": st.column_config.SelectboxColumn("Attaque", options=TEXT_OPTIONS, required=True),
+            "Défense": st.column_config.SelectboxColumn("Défense", options=TEXT_OPTIONS, required=True),
+            "Gardien": st.column_config.SelectboxColumn("Gardien", options=TEXT_OPTIONS, required=True),
+            "Collectif": st.column_config.SelectboxColumn("Collectif", options=TEXT_OPTIONS, required=True),
+        }, 
+        hide_index=True, 
+        use_container_width=True
+    )
+
+    # Affichage séparé et informatif de la Note Globale calculée
+    st.markdown("##### 📊 Aperçu des Notes Globales (Moyennes calculées)")
+    view_df = edited_players.copy()
+    view_df["Note Globale"] = view_df.apply(calculate_global_score, axis=1)
+    st.dataframe(view_df[["Nom du Joueur", "Note Globale"]], hide_index=True, use_container_width=True)
+
+    if st.button("💾 Enregistrer les modifications", type="primary"):
+        st.session_state.players_df = edited_players
+        save_data(edited_players)
+        st.success("✅ Fichier Excel sauvegardé avec succès !")
+        st.rerun()
+
+    st.write("---")
+
+    st.subheader("📥 / 📤 Import & Export de la Base Excel")
+    col_dl, col_ul = st.columns(2)
+    
+    with col_dl:
+        st.markdown("**1. Télécharger la BDD actuelle**")
+        excel_buffer = io.BytesIO()
+        
+        export_df = st.session_state.players_df.copy()
+        if "Note Globale" in export_df.columns:
+            export_df = export_df.drop(columns=["Note Globale"])
+            
+        export_df.to_excel(excel_buffer, index=False)
+        excel_buffer.seek(0)
+        
+        st.download_button(
+            label="💾 Télécharger database_joueurs_v2.xlsx",
+            data=excel_buffer,
+            file_name="database_joueurs_v2.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+    with col_ul:
+        st.markdown("**2. Remplacer avec un fichier Excel modifié**")
+        uploaded_file = st.file_uploader("Importer une nouvelle base (.xlsx)", type=["xlsx"])
+        if uploaded_file is not None:
+            try:
+                new_df = pd.read_excel(uploaded_file)
+                required_cols = ["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif"]
+                if all(col in new_df.columns for col in required_cols):
+                    if "Surnoms" not in new_df.columns:
+                        new_df["Surnoms"] = ""
+                    new_df["Surnoms"] = new_df["Surnoms"].fillna("")
+                    
+                    if "Note Globale" in new_df.columns:
+                        new_df = new_df.drop(columns=["Note Globale"])
+                        
+                    for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
+                        new_df[col] = new_df[col].apply(format_star_option)
+                        
+                    st.session_state.players_df = new_df
+                    save_data(new_df)
+                    st.success("✅ Base de données mise à jour avec succès depuis le fichier téléversé !")
+                    st.rerun()
+                else:
+                    st.error("Le fichier importé doit contenir au moins les colonnes : Nom du Joueur, Attaque, Défense, Gardien, Collectif")
+            except Exception as e:
+                st.error(f"Erreur lors de la lecture du fichier Excel : {e}")
