@@ -44,15 +44,16 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-TEXT_OPTIONS = ["1 - Pas bon", "2 - Moyennement bon", "3 - Assez bon", "4 - Très bon"]
+# 🌟 NOUVEAU SYSTÈME DE NOTATION SUR 10 ÉTOILES
+TEXT_OPTIONS = [f"{i} ⭐" for i in range(1, 11)]
 
 def text_to_score(text_value):
-    text_str = str(text_value)
-    if text_str.startswith("1"): return 1
-    if text_str.startswith("2"): return 2
-    if text_str.startswith("3"): return 3
-    if text_str.startswith("4"): return 4
-    return 2
+    """ Extrait la valeur numérique (1 à 10) depuis la chaîne de texte """
+    match = re.search(r'\d+', str(text_value))
+    if match:
+        val = int(match.group())
+        return max(1, min(10, val))
+    return 5
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -61,12 +62,12 @@ def load_data():
             if "Surnoms" not in df.columns:
                 df["Surnoms"] = ""
             if "Gardien" not in df.columns:
-                df["Gardien"] = TEXT_OPTIONS[1]
+                df["Gardien"] = "5 ⭐"
                 
             df["Surnoms"] = df["Surnoms"].fillna("")
             for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
                 if col in df.columns:
-                    df[col] = df[col].apply(lambda x: x if str(x) in TEXT_OPTIONS else TEXT_OPTIONS[1])
+                    df[col] = df[col].apply(lambda x: x if str(x) in TEXT_OPTIONS else f"{text_to_score(x)} ⭐")
             return df
         except Exception: 
             pass
@@ -74,10 +75,10 @@ def load_data():
     return pd.DataFrame({
         "Nom du Joueur": ["Antho", "Cyril V", "Apou", "Benoit", "Nico P", "Mouyss", "Cédric", "Nico M", "David", "Cyril L"],
         "Surnoms": ["", "Cyril", "", "beny", "nicop, nico", "mouys", "", "nicom, nico", "Dav, dimeh", "Cyril"],
-        "Attaque": ["4 - Très bon", "2 - Moyennement bon", "3 - Assez bon", "4 - Très bon", "2 - Moyennement bon", "3 - Assez bon", "1 - Pas bon", "3 - Assez bon", "2 - Moyennement bon", "1 - Pas bon"],
-        "Défense": ["2 - Moyennement bon", "4 - Très bon", "2 - Moyennement bon", "1 - Pas bon", "4 - Très bon", "1 - Pas bon", "4 - Très bon", "2 - Moyennement bon", "3 - Assez bon", "3 - Assez bon"],
-        "Gardien": ["1 - Pas bon", "2 - Moyennement bon", "3 - Assez bon", "1 - Pas bon", "3 - Assez bon", "2 - Moyennement bon", "4 - Très bon", "1 - Pas bon", "2 - Moyennement bon", "2 - Moyennement bon"],
-        "Collectif": ["3 - Assez bon", "4 - Très bon", "3 - Assez bon", "2 - Moyennement bon", "3 - Assez bon", "2 - Moyennement bon", "3 - Assez bon", "2 - Moyennement bon", "2 - Moyennement bon", "2 - Moyennement bon"]
+        "Attaque": ["9 ⭐", "5 ⭐", "7 ⭐", "9 ⭐", "5 ⭐", "7 ⭐", "3 ⭐", "7 ⭐", "5 ⭐", "3 ⭐"],
+        "Défense": ["5 ⭐", "9 ⭐", "5 ⭐", "3 ⭐", "9 ⭐", "3 ⭐", "9 ⭐", "5 ⭐", "7 ⭐", "7 ⭐"],
+        "Gardien": ["3 ⭐", "5 ⭐", "7 ⭐", "3 ⭐", "7 ⭐", "5 ⭐", "9 ⭐", "3 ⭐", "5 ⭐", "5 ⭐"],
+        "Collectif": ["7 ⭐", "9 ⭐", "7 ⭐", "5 ⭐", "7 ⭐", "5 ⭐", "7 ⭐", "5 ⭐", "5 ⭐", "5 ⭐"]
     })
 
 def save_data(df):
@@ -345,10 +346,10 @@ with tab1:
         else:
             with st.form(f"form_quick_add_{current_unknown}"):
                 new_clean_name = st.text_input("Nom officiel pour la BDD", value=current_unknown)
-                att_l = st.selectbox("Attaque", options=TEXT_OPTIONS, index=1)
-                def_l = st.selectbox("Défense", options=TEXT_OPTIONS, index=1)
-                gk_l  = st.selectbox("Gardien", options=TEXT_OPTIONS, index=1)
-                col_l = st.selectbox("Collectif", options=TEXT_OPTIONS, index=2)
+                att_l = st.selectbox("Attaque", options=TEXT_OPTIONS, index=4)
+                def_l = st.selectbox("Défense", options=TEXT_OPTIONS, index=4)
+                gk_l  = st.selectbox("Gardien", options=TEXT_OPTIONS, index=4)
+                col_l = st.selectbox("Collectif", options=TEXT_OPTIONS, index=4)
                 
                 if st.form_submit_button("💾 Enregistrer et Cocher"):
                     if new_clean_name.strip():
@@ -499,10 +500,10 @@ with tab2:
         with st.form("form_add"):
             name = st.text_input("Nom / Pseudo du joueur")
             surnames = st.text_input("Surnoms séparés par des virgules (Optionnel)", placeholder="ex: Nico, Nick")
-            att_label = st.selectbox("Niveau en Attaque", options=TEXT_OPTIONS, index=1)
-            def_label = st.selectbox("Niveau en Défense", options=TEXT_OPTIONS, index=1)
-            gk_label  = st.selectbox("Niveau en Gardien", options=TEXT_OPTIONS, index=1)
-            col_label = st.selectbox("Niveau en Collectif", options=TEXT_OPTIONS, index=2)
+            att_label = st.selectbox("Niveau en Attaque", options=TEXT_OPTIONS, index=4)
+            def_label = st.selectbox("Niveau en Défense", options=TEXT_OPTIONS, index=4)
+            gk_label  = st.selectbox("Niveau en Gardien", options=TEXT_OPTIONS, index=4)
+            col_label = st.selectbox("Niveau en Collectif", options=TEXT_OPTIONS, index=4)
             
             if st.form_submit_button("Ajouter le joueur"):
                 if name.strip() and name.strip() not in st.session_state.players_df["Nom du Joueur"].values:
