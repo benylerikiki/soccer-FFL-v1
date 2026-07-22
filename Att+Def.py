@@ -8,8 +8,16 @@ import io
 import itertools
 import re
 
+# Fichiers requis
+DATA_FILE = 'database_joueurs_v2.xlsx'       
+BLUE_CARD_PATH = 'card_blue.png'
+RED_CARD_PATH = 'card_red.png'
+FONT_PATH = 'FootballAttack.otf'
+LOGO_PATH = 'icon_ffl.png'
+
 # Configuration de la page Streamlit
-st.set_page_config(page_title="Soccer FFL Kompo", page_icon="icon_ffl.png", layout="wide")
+page_icon = LOGO_PATH if os.path.exists(LOGO_PATH) else "⚽"
+st.set_page_config(page_title="Soccer FFL Kompo", page_icon=page_icon, layout="wide")
 
 # 📳 FORCE LE MODE GRILLE SUR MOBILE
 st.markdown(
@@ -45,11 +53,6 @@ def text_to_score(text_value):
     if text_str.startswith("3"): return 3
     if text_str.startswith("4"): return 4
     return 2
-
-DATA_FILE = 'database_joueurs_v2.xlsx'       
-BLUE_CARD_PATH = 'card_blue.png'
-RED_CARD_PATH = 'card_red.png'
-FONT_PATH = 'FootballAttack.otf'
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -198,7 +201,7 @@ def draw_combined_field(t1, t2):
 
 
 # --- POP-UP DES COMPOSITIONS ---
-@st.dialog("Compositions du Match ⚽", width="large")
+@st.dialog("Compositions du Match", width="large")
 def show_teams_popup(t1, t2):
     st.write("Match équilibré généré avec succès ! 📸")
     fig_combined = draw_combined_field(t1, t2)
@@ -226,7 +229,14 @@ def show_teams_popup(t1, t2):
 
 
 # --- INTERFACE PRINCIPALE ---
-st.header("⚽ Soccer FFL Kompo")
+col_logo, col_title = st.columns([1, 6])
+with col_logo:
+    if os.path.exists(LOGO_PATH):
+        st.image(LOGO_PATH, width=90)
+    else:
+        st.title("⚽")
+with col_title:
+    st.header("Soccer FFL Kompo")
 
 tab1, tab2 = st.tabs(["⚖️ Équilibrage du Jour", "🏃 Gestion de la Base"])
 
@@ -462,7 +472,6 @@ with tab1:
                 diff_gk  = abs(t1_gk_sum - t2_gk_sum)
                 diff_col = abs(t1_col_sum - t2_col_sum)
                 
-                # Calcul de l'écart total incluant la capacité gardien
                 total_diff = diff_att + diff_def + diff_gk + diff_col
                 
                 if total_diff < best_diff:
@@ -491,6 +500,48 @@ with tab1:
 
 with tab2:
     st.header("Gestion de la base des joueurs")
+    
+    # --- MODULE DE TÉLÉCHARGEMENT & RÉ-UPLOAD EXCEL ---
+    st.subheader("📥 / 📤 Import & Export de la Base Excel")
+    col_dl, col_ul = st.columns(2)
+    
+    with col_dl:
+        st.markdown("**1. Télécharger la BDD actuelle**")
+        excel_buffer = io.BytesIO()
+        st.session_state.players_df.to_excel(excel_buffer, index=False)
+        excel_buffer.seek(0)
+        
+        st.download_button(
+            label="💾 Télécharger database_joueurs_v2.xlsx",
+            data=excel_buffer,
+            file_name="database_joueurs_v2.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+    with col_ul:
+        st.markdown("**2. Remplacer avec un fichier Excel modifié**")
+        uploaded_file = st.file_uploader("Importer une nouvelle base (.xlsx)", type=["xlsx"])
+        if uploaded_file is not None:
+            try:
+                new_df = pd.read_excel(uploaded_file)
+                # Vérification minimale des colonnes requises
+                required_cols = ["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif"]
+                if all(col in new_df.columns for col in required_cols):
+                    if "Surnoms" not in new_df.columns:
+                        new_df["Surnoms"] = ""
+                    new_df["Surnoms"] = new_df["Surnoms"].fillna("")
+                    
+                    st.session_state.players_df = new_df
+                    save_data(new_df)
+                    st.success("✅ Base de données mise à jour avec succès depuis le fichier téléversé !")
+                    st.rerun()
+                else:
+                    st.error("Le fichier importé doit contenir au moins les colonnes : Nom du Joueur, Attaque, Défense, Gardien, Collectif")
+            except Exception as e:
+                st.error(f"Erreur lors de la lecture du fichier Excel : {e}")
+
+    st.write("---")
+    
     with st.expander("➕ Ajouter manuellement un nouveau joueur"):
         with st.form("form_add"):
             name = st.text_input("Nom / Pseudo du joueur")
@@ -515,7 +566,7 @@ with tab2:
                     st.error("Le nom est vide ou existe déjà.")
                     
     st.write("---")
-    st.subheader("📝 Modification et édition de l'effectif")
+    st.subheader("📝 Modification et édition directe de l'effectif")
     
     edited_players = st.data_editor(
         st.session_state.players_df, 
