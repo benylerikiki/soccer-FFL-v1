@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from PIL import Image, ImageDraw, ImageFont
 import io
 import itertools
 import re
@@ -46,6 +47,9 @@ def text_to_score(text_value):
     return 2
 
 DATA_FILE = 'database_joueurs_v2.xlsx'       
+BLUE_CARD_PATH = 'card_blue.png'
+RED_CARD_PATH = 'card_red.png'
+FONT_PATH = 'FootballAttack.otf'
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -53,9 +57,13 @@ def load_data():
             df = pd.read_excel(DATA_FILE)
             if "Surnoms" not in df.columns:
                 df["Surnoms"] = ""
+            if "Gardien" not in df.columns:
+                df["Gardien"] = TEXT_OPTIONS[1]
+                
             df["Surnoms"] = df["Surnoms"].fillna("")
-            for col in ["Attaque", "Défense", "Collectif"]:
-                df[col] = df[col].apply(lambda x: x if str(x) in TEXT_OPTIONS else TEXT_OPTIONS[1])
+            for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
+                if col in df.columns:
+                    df[col] = df[col].apply(lambda x: x if str(x) in TEXT_OPTIONS else TEXT_OPTIONS[1])
             return df
         except Exception: 
             pass
@@ -65,6 +73,7 @@ def load_data():
         "Surnoms": ["", "Cyril", "", "beny", "nicop, nico", "mouys", "", "nicom, nico", "Dav, dimeh", "Cyril"],
         "Attaque": ["4 - Très bon", "2 - Moyennement bon", "3 - Assez bon", "4 - Très bon", "2 - Moyennement bon", "3 - Assez bon", "1 - Pas bon", "3 - Assez bon", "2 - Moyennement bon", "1 - Pas bon"],
         "Défense": ["2 - Moyennement bon", "4 - Très bon", "2 - Moyennement bon", "1 - Pas bon", "4 - Très bon", "1 - Pas bon", "4 - Très bon", "2 - Moyennement bon", "3 - Assez bon", "3 - Assez bon"],
+        "Gardien": ["1 - Pas bon", "2 - Moyennement bon", "3 - Assez bon", "1 - Pas bon", "3 - Assez bon", "2 - Moyennement bon", "4 - Très bon", "1 - Pas bon", "2 - Moyennement bon", "2 - Moyennement bon"],
         "Collectif": ["3 - Assez bon", "4 - Très bon", "3 - Assez bon", "2 - Moyennement bon", "3 - Assez bon", "2 - Moyennement bon", "3 - Assez bon", "2 - Moyennement bon", "2 - Moyennement bon", "2 - Moyennement bon"]
     })
 
@@ -81,12 +90,43 @@ if 'auto_selected' not in st.session_state:
 for name in st.session_state.auto_selected:
     st.session_state[f"select_{name}"] = True
 
+# --- GÉNÉRATION DES CARTES JOUEURS ---
+def create_player_card(card_path, player_name):
+    if not os.path.exists(card_path):
+        return None
+    
+    card_img = Image.open(card_path).convert("RGBA")
+    draw = ImageDraw.Draw(card_img)
+    w, h = card_img.size
+    
+    y_pos = int(h * (2 / 3))
+    
+    font_size = max(16, int(w * 0.12))
+    try:
+        font = ImageFont.truetype(FONT_PATH, font_size)
+    except Exception:
+        font = ImageFont.load_default()
+        
+    text_bbox = draw.textbbox((0, 0), player_name.upper(), font=font)
+    text_w = text_bbox[2] - text_bbox[0]
+    text_h = text_bbox[3] - text_bbox[1]
+    
+    x_pos = (w - text_w) / 2
+    y_pos_centered = y_pos - (text_h / 2)
+    
+    stroke_w = max(1, int(font_size * 0.05))
+    draw.text((x_pos, y_pos_centered), player_name.upper(), fill="white", font=font, stroke_width=stroke_w, stroke_fill="black")
+    
+    return card_img
+
+
 # --- DESSIN DU TERRAIN ---
 def draw_combined_field(t1, t2):
-    fig, ax = plt.subplots(figsize=(8, 5.2))
+    fig, ax = plt.subplots(figsize=(10, 6.5))
     fig.patch.set_facecolor('#226343')
     ax.set_facecolor('#226343')
     
+    # Lignes du terrain
     ax.plot([0, 100, 100, 0, 0], [0, 0, 60, 60, 0], color='white', linewidth=2.0)
     ax.plot([50, 50], [0, 60], color='white', linewidth=2.0)
     center_circle = patches.Circle((50, 30), 9, edgecolor='white', facecolor='none', linewidth=1.5)
@@ -98,40 +138,59 @@ def draw_combined_field(t1, t2):
     ax.add_patch(patches.Rectangle((88, 15), 12, 30, edgecolor='white', facecolor='none', linewidth=1.5))
     ax.scatter(91, 30, color='white', s=15, zorder=2)
     
-    # Équipe 1
-    pos1 = [(7, 30), (22, 14), (22, 46), (40, 18), (40, 42)]
+    card_width = 11.0
+    card_height = 15.0
+    
+    # Équipe 1 (Bleu) - Le meilleur gardien est placé au cage (pos1[0])
+    pos1 = [(6, 30), (22, 14), (22, 46), (40, 18), (40, 42)]
     players1 = t1.copy()
-    players1['Def_Num'] = players1['Défense'].apply(text_to_score)
-    players1 = players1.sort_values(by="Def_Num", ascending=False).reset_index(drop=True)
+    players1['Gk_Num'] = players1['Gardien'].apply(text_to_score)
+    players1 = players1.sort_values(by="Gk_Num", ascending=False).reset_index(drop=True)
+    
     for i, row in players1.iterrows():
         if i >= len(pos1): break
         x, y = pos1[i]
-        ax.scatter(x, y, color="#1C6CF6", s=220, edgecolors='white', linewidths=1.5, zorder=3)
-        ax.text(x, y - 4.2, row['Nom du Joueur'], color='white', fontsize=11, weight='bold', ha='center', va='center', zorder=4)
+        p_name = row['Nom du Joueur']
         
-    # Équipe 2
-    pos2 = [(93, 30), (78, 14), (78, 46), (60, 18), (60, 42)]
+        card_img = create_player_card(BLUE_CARD_PATH, p_name)
+        if card_img:
+            ax.imshow(card_img, extent=[x - card_width/2, x + card_width/2, y - card_height/2, y + card_height/2], zorder=3)
+        else:
+            ax.scatter(x, y, color="#1C6CF6", s=250, edgecolors='white', linewidths=1.5, zorder=3)
+            ax.text(x, y - 4.5, p_name, color='white', fontsize=10, weight='bold', ha='center', va='center', zorder=4)
+        
+    # Équipe 2 (Rouge) - Le meilleur gardien est placé au cage (pos2[0])
+    pos2 = [(94, 30), (78, 14), (78, 46), (60, 18), (60, 42)]
     players2 = t2.copy()
-    players2['Def_Num'] = players2['Défense'].apply(text_to_score)
-    players2 = players2.sort_values(by="Def_Num", ascending=False).reset_index(drop=True)
+    players2['Gk_Num'] = players2['Gardien'].apply(text_to_score)
+    players2 = players2.sort_values(by="Gk_Num", ascending=False).reset_index(drop=True)
+    
     for i, row in players2.iterrows():
         if i >= len(pos2): break
         x, y = pos2[i]
-        ax.scatter(x, y, color="#E03131", s=220, edgecolors='white', linewidths=1.5, zorder=3)
-        ax.text(x, y - 4.2, row['Nom du Joueur'], color='white', fontsize=11, weight='bold', ha='center', va='center', zorder=4)
+        p_name = row['Nom du Joueur']
+        
+        card_img = create_player_card(RED_CARD_PATH, p_name)
+        if card_img:
+            ax.imshow(card_img, extent=[x - card_width/2, x + card_width/2, y - card_height/2, y + card_height/2], zorder=3)
+        else:
+            ax.scatter(x, y, color="#E03131", s=250, edgecolors='white', linewidths=1.5, zorder=3)
+            ax.text(x, y - 4.5, p_name, color='white', fontsize=10, weight='bold', ha='center', va='center', zorder=4)
     
     t1_att = t1['Attaque'].apply(text_to_score).sum()
     t1_def = t1['Défense'].apply(text_to_score).sum()
+    t1_gk  = t1['Gardien'].apply(text_to_score).sum()
     t1_col = t1['Collectif'].apply(text_to_score).sum()
     
     t2_att = t2['Attaque'].apply(text_to_score).sum()
     t2_def = t2['Défense'].apply(text_to_score).sum()
+    t2_gk  = t2['Gardien'].apply(text_to_score).sum()
     t2_col = t2['Collectif'].apply(text_to_score).sum()
     
-    ax.text(25, 64, f"EQUIPE 1\n(A:{t1_att} D:{t1_def} C:{t1_col})", color='#1C6CF6', fontsize=12, weight='bold', ha='center', va='center')
-    ax.text(75, 64, f"EQUIPE 2\n(A:{t2_att} D:{t2_def} C:{t2_col})", color='#E03131', fontsize=12, weight='bold', ha='center', va='center')
+    ax.text(25, 64, f"ÉQUIPE 1\n(A:{t1_att} D:{t1_def} G:{t1_gk} C:{t1_col})", color='#1C6CF6', fontsize=11, weight='bold', ha='center', va='center')
+    ax.text(75, 64, f"ÉQUIPE 2\n(A:{t2_att} D:{t2_def} G:{t2_gk} C:{t2_col})", color='#E03131', fontsize=11, weight='bold', ha='center', va='center')
     
-    ax.set_xlim(-4, 104)
+    ax.set_xlim(-6, 106)
     ax.set_ylim(-6, 68)
     ax.axis('off')
     plt.tight_layout()
@@ -186,13 +245,10 @@ with tab1:
                     
                     df_db = st.session_state.players_df
                     
-                    # Construction des cartes d'équivalence (nom ou surnom -> liste de joueurs)
                     alias_map = {}
                     for _, row in df_db.iterrows():
                         real_name = row["Nom du Joueur"]
-                        # Ajout du nom réel
                         alias_map.setdefault(real_name.lower(), []).append(real_name)
-                        # Ajout des surnoms
                         surnoms = [s.strip().lower() for s in str(row["Surnoms"]).split(",") if s.strip()]
                         for s in surnoms:
                             if real_name not in alias_map.setdefault(s, []):
@@ -200,7 +256,7 @@ with tab1:
                     
                     found_players = set()
                     unknown_names = []
-                    ambiguous_matches = [] # Surnoms partagés par plusieurs joueurs
+                    ambiguous_matches = []
                     
                     for raw_name in extracted_names:
                         key = raw_name.lower()
@@ -209,7 +265,6 @@ with tab1:
                             if len(candidates) == 1:
                                 found_players.add(candidates[0])
                             else:
-                                # Garde-fou : Plusieurs personnes partagent ce surnom/prénom
                                 ambiguous_matches.append({
                                     "convoc_name": raw_name,
                                     "candidates": candidates
@@ -236,7 +291,7 @@ with tab1:
     if 'ambiguous_matches' in st.session_state and st.session_state.ambiguous_matches:
         st.warning("⚠️ **Garde-fou : Surnom partagé par plusieurs joueurs**")
         current_amb = st.session_state.ambiguous_matches[0]
-        convoc_n = current_amb["convoc_n" if "convoc_n" in current_amb else "convoc_name"]
+        convoc_n = current_amb.get("convoc_name", current_amb.get("convoc_n"))
         candidates = current_amb["candidates"]
         
         st.markdown(f"Dans la convocation, le nom **'{convoc_n}'** peut correspondre à plusieurs joueurs de la base :")
@@ -269,7 +324,6 @@ with tab1:
         if choice == "Associer ce surnom à un joueur existant dans la BDD":
             linked_name = st.selectbox("Sélectionner le profil existant :", options=db_names)
             if st.button(f"Associer '{current_unknown}' comme surnom de {linked_name}"):
-                # Ajout du nouveau surnom dans le DataFrame
                 idx = st.session_state.players_df[st.session_state.players_df["Nom du Joueur"] == linked_name].index[0]
                 existing_surnames = str(st.session_state.players_df.loc[idx, "Surnoms"]).strip()
                 
@@ -291,6 +345,7 @@ with tab1:
                 new_clean_name = st.text_input("Nom officiel pour la BDD", value=current_unknown)
                 att_l = st.selectbox("Attaque", options=TEXT_OPTIONS, index=1)
                 def_l = st.selectbox("Défense", options=TEXT_OPTIONS, index=1)
+                gk_l  = st.selectbox("Gardien", options=TEXT_OPTIONS, index=1)
                 col_l = st.selectbox("Collectif", options=TEXT_OPTIONS, index=2)
                 
                 if st.form_submit_button("💾 Enregistrer et Cocher"):
@@ -299,7 +354,7 @@ with tab1:
                         new_p = pd.DataFrame({
                             "Nom du Joueur": [new_clean], 
                             "Surnoms": [current_unknown if new_clean != current_unknown else ""],
-                            "Attaque": [att_l], "Défense": [def_l], "Collectif": [col_l]
+                            "Attaque": [att_l], "Défense": [def_l], "Gardien": [gk_l], "Collectif": [col_l]
                         })
                         st.session_state.players_df = pd.concat([st.session_state.players_df, new_p], ignore_index=True)
                         save_data(st.session_state.players_df)
@@ -394,17 +449,21 @@ with tab1:
                 
                 t1_att_sum = df_t1['Attaque'].apply(text_to_score).sum()
                 t1_def_sum = df_t1['Défense'].apply(text_to_score).sum()
+                t1_gk_sum  = df_t1['Gardien'].apply(text_to_score).sum()
                 t1_col_sum = df_t1['Collectif'].apply(text_to_score).sum()
                 
                 t2_att_sum = df_t2['Attaque'].apply(text_to_score).sum()
                 t2_def_sum = df_t2['Défense'].apply(text_to_score).sum()
+                t2_gk_sum  = df_t2['Gardien'].apply(text_to_score).sum()
                 t2_col_sum = df_t2['Collectif'].apply(text_to_score).sum()
                 
                 diff_att = abs(t1_att_sum - t2_att_sum)
                 diff_def = abs(t1_def_sum - t2_def_sum)
+                diff_gk  = abs(t1_gk_sum - t2_gk_sum)
                 diff_col = abs(t1_col_sum - t2_col_sum)
                 
-                total_diff = diff_att + diff_def + diff_col
+                # Calcul de l'écart total incluant la capacité gardien
+                total_diff = diff_att + diff_def + diff_gk + diff_col
                 
                 if total_diff < best_diff:
                     best_diff = total_diff
@@ -424,10 +483,10 @@ with tab1:
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**🔵 Équipe 1**")
-            st.dataframe(st.session_state.last_team1[["Nom du Joueur", "Attaque", "Défense", "Collectif"]], hide_index=True)
+            st.dataframe(st.session_state.last_team1[["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif"]], hide_index=True)
         with c2:
             st.markdown("**🔴 Équipe 2**")
-            st.dataframe(st.session_state.last_team2[["Nom du Joueur", "Attaque", "Défense", "Collectif"]], hide_index=True)
+            st.dataframe(st.session_state.last_team2[["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif"]], hide_index=True)
 
 
 with tab2:
@@ -438,6 +497,7 @@ with tab2:
             surnames = st.text_input("Surnoms séparés par des virgules (Optionnel)", placeholder="ex: Nico, Nick")
             att_label = st.selectbox("Niveau en Attaque", options=TEXT_OPTIONS, index=1)
             def_label = st.selectbox("Niveau en Défense", options=TEXT_OPTIONS, index=1)
+            gk_label  = st.selectbox("Niveau en Gardien", options=TEXT_OPTIONS, index=1)
             col_label = st.selectbox("Niveau en Collectif", options=TEXT_OPTIONS, index=2)
             
             if st.form_submit_button("Ajouter le joueur"):
@@ -445,7 +505,7 @@ with tab2:
                     new_player = pd.DataFrame({
                         "Nom du Joueur": [name.strip()], 
                         "Surnoms": [surnames.strip()],
-                        "Attaque": [att_label], "Défense": [def_label], "Collectif": [col_label]
+                        "Attaque": [att_label], "Défense": [def_label], "Gardien": [gk_label], "Collectif": [col_label]
                     })
                     st.session_state.players_df = pd.concat([st.session_state.players_df, new_player], ignore_index=True)
                     save_data(st.session_state.players_df)
@@ -464,6 +524,7 @@ with tab2:
             "Surnoms": st.column_config.TextColumn("Surnoms (séparés par des virgules)", help="Ex: Nico, Nick, Ptit Nico"),
             "Attaque": st.column_config.SelectboxColumn("Attaque", options=TEXT_OPTIONS, required=True),
             "Défense": st.column_config.SelectboxColumn("Défense", options=TEXT_OPTIONS, required=True),
+            "Gardien": st.column_config.SelectboxColumn("Gardien", options=TEXT_OPTIONS, required=True),
             "Collectif": st.column_config.SelectboxColumn("Collectif", options=TEXT_OPTIONS, required=True),
         }, 
         hide_index=True, 
