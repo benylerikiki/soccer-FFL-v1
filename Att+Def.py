@@ -73,7 +73,6 @@ def load_data():
                 
             df["Surnoms"] = df["Surnoms"].fillna("")
             
-            # Normalise et garantit le formatage exact pour le data_editor
             for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
                 if col in df.columns:
                     df[col] = df[col].apply(format_star_option)
@@ -91,7 +90,6 @@ def load_data():
     })
 
 def save_data(df):
-    # Formate avant enregistrement
     for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
         if col in df.columns:
             df[col] = df[col].apply(format_star_option)
@@ -100,7 +98,6 @@ def save_data(df):
 if 'players_df' not in st.session_state:
     st.session_state.players_df = load_data()
 
-# Initialisation de l'ensemble des joueurs sélectionnés
 if 'auto_selected' not in st.session_state:
     st.session_state.auto_selected = set()
 
@@ -115,7 +112,8 @@ def create_player_card(card_path, player_name):
     
     y_pos = int(h * (2 / 3))
     
-    font_size = max(16, int(w * 0.12))
+    # POLICE AGRANDIE ICI (15% au lieu de 12%)
+    font_size = max(20, int(w * 0.15))
     try:
         font = ImageFont.truetype(FONT_PATH, font_size)
     except Exception:
@@ -128,15 +126,22 @@ def create_player_card(card_path, player_name):
     x_pos = (w - text_w) / 2
     y_pos_centered = y_pos - (text_h / 2)
     
-    stroke_w = max(1, int(font_size * 0.05))
+    stroke_w = max(1, int(font_size * 0.06))
     draw.text((x_pos, y_pos_centered), player_name.upper(), fill="white", font=font, stroke_width=stroke_w, stroke_fill="black")
     
     return card_img
 
+# --- FONCTION UTILITAIRE POUR LES BARRES DE PROGRESSION ---
+def make_progress_bar(val, max_val=50, length=8):
+    """ Génère une barre de progression sous forme de blocs ascii """
+    ratio = min(1.0, max(0.0, val / max_val))
+    filled_len = int(round(length * ratio))
+    bar = '█' * filled_len + '░' * (length - filled_len)
+    return bar
 
 # --- DESSIN DU TERRAIN ---
 def draw_combined_field(t1, t2):
-    fig, ax = plt.subplots(figsize=(10, 6.5))
+    fig, ax = plt.subplots(figsize=(10, 6.8))
     fig.patch.set_facecolor('#226343')
     ax.set_facecolor('#226343')
     
@@ -171,7 +176,7 @@ def draw_combined_field(t1, t2):
             ax.imshow(card_img, extent=[x - card_width/2, x + card_width/2, y - card_height/2, y + card_height/2], zorder=3)
         else:
             ax.scatter(x, y, color="#1C6CF6", s=250, edgecolors='white', linewidths=1.5, zorder=3)
-            ax.text(x, y - 4.5, p_name, color='white', fontsize=10, weight='bold', ha='center', va='center', zorder=4)
+            ax.text(x, y - 4.5, p_name, color='white', fontsize=11, weight='bold', ha='center', va='center', zorder=4)
         
     # Équipe 2 (Rouge)
     pos2 = [(94, 30), (78, 14), (78, 46), (60, 18), (60, 42)]
@@ -189,8 +194,9 @@ def draw_combined_field(t1, t2):
             ax.imshow(card_img, extent=[x - card_width/2, x + card_width/2, y - card_height/2, y + card_height/2], zorder=3)
         else:
             ax.scatter(x, y, color="#E03131", s=250, edgecolors='white', linewidths=1.5, zorder=3)
-            ax.text(x, y - 4.5, p_name, color='white', fontsize=10, weight='bold', ha='center', va='center', zorder=4)
+            ax.text(x, y - 4.5, p_name, color='white', fontsize=11, weight='bold', ha='center', va='center', zorder=4)
     
+    # Calcul des totaux par stat
     t1_att = t1['Attaque'].apply(text_to_score).sum()
     t1_def = t1['Défense'].apply(text_to_score).sum()
     t1_gk  = t1['Gardien'].apply(text_to_score).sum()
@@ -201,15 +207,22 @@ def draw_combined_field(t1, t2):
     t2_gk  = t2['Gardien'].apply(text_to_score).sum()
     t2_col = t2['Collectif'].apply(text_to_score).sum()
     
-    ax.text(25, 64, f"ÉQUIPE 1\n(A:{t1_att} D:{t1_def} G:{t1_gk} C:{t1_col})", color='#1C6CF6', fontsize=11, weight='bold', ha='center', va='center')
-    ax.text(75, 64, f"ÉQUIPE 2\n(A:{t2_att} D:{t2_def} G:{t2_gk} C:{t2_col})", color='#E03131', fontsize=11, weight='bold', ha='center', va='center')
+    # TITRES EN BLANC ET PLUS GRANDS
+    ax.text(25, 65, "ÉQUIPE 1", color='white', fontsize=15, weight='bold', ha='center', va='center')
+    ax.text(75, 65, "ÉQUIPE 2", color='white', fontsize=15, weight='bold', ha='center', va='center')
+    
+    # STATS EN BARRES DE PROGRESSION ASCII
+    stats_t1_str = f"ATT  {make_progress_bar(t1_att)} ({t1_att})\nDEF  {make_progress_bar(t1_def)} ({t1_def})\nGAR  {make_progress_bar(t1_gk)} ({t1_gk})\nCOL  {make_progress_bar(t1_col)} ({t1_col})"
+    stats_t2_str = f"ATT  {make_progress_bar(t2_att)} ({t2_att})\nDEF  {make_progress_bar(t2_def)} ({t2_def})\nGAR  {make_progress_bar(t2_gk)} ({t2_gk})\nCOL  {make_progress_bar(t2_col)} ({t2_col})"
+    
+    ax.text(25, -4, stats_t1_str, color='#8EC5FC', fontsize=8.5, family='monospace', weight='bold', ha='center', va='top')
+    ax.text(75, -4, stats_t2_str, color='#FF9A9E', fontsize=8.5, family='monospace', weight='bold', ha='center', va='top')
     
     ax.set_xlim(-6, 106)
-    ax.set_ylim(-6, 68)
+    ax.set_ylim(-12, 69)
     ax.axis('off')
     plt.tight_layout()
     return fig
-
 
 # --- POP-UP DES COMPOSITIONS ---
 @st.dialog("Compositions du Match", width="large")
@@ -238,7 +251,6 @@ def show_teams_popup(t1, t2):
     st.code(text_whatsapp, language="text")
     if st.button("Fermer"): st.rerun()
 
-
 # --- INTERFACE PRINCIPALE ---
 col_logo, col_title = st.columns([1, 6])
 with col_logo:
@@ -252,7 +264,6 @@ with col_title:
 tab1, tab2 = st.tabs(["⚖️ Équilibrage du Jour", "🏃 Gestion de la Base"])
 
 with tab1:
-    # --- MODULE D'ANALYSE AUTOMATIQUE DE CONVOCATION ---
     with st.expander("📋 Analyser une convocation WhatsApp (Optionnel)", expanded=False):
         convoc_text = st.text_area("Colle le texte brut de ta convocation ici :", height=150, placeholder="Présents : nicoP (1) , dimeh(2)...")
         
@@ -265,7 +276,6 @@ with tab1:
                     extracted_names = [n.strip() for n in re.split(r"[, ]+", cleaned_line) if n.strip()]
                     
                     df_db = st.session_state.players_df
-                    
                     alias_map = {}
                     for _, row in df_db.iterrows():
                         real_name = row["Nom du Joueur"]
@@ -305,7 +315,6 @@ with tab1:
             else:
                 st.error("Le texte est vide.")
 
-    # --- GARDE-FOU 1 : DÉSAMBIGUÏSATION DES SURNOMS PARTAGÉS ---
     if 'ambiguous_matches' in st.session_state and st.session_state.ambiguous_matches:
         st.warning("⚠️ **Garde-fou : Surnom partagé par plusieurs joueurs**")
         current_amb = st.session_state.ambiguous_matches[0]
@@ -324,11 +333,9 @@ with tab1:
             st.session_state.ambiguous_matches.pop(0)
             st.rerun()
 
-    # --- GARDE-FOU 2 : GESTION DES NOMS INCONNUS ---
     if ('ambiguous_matches' not in st.session_state or not st.session_state.ambiguous_matches) and ('unknown_names' in st.session_state and st.session_state.unknown_names):
         st.info("💡 **Résolution des joueurs inconnus :**")
         db_names = sorted(list(st.session_state.players_df["Nom du Joueur"].values))
-        
         current_unknown = st.session_state.unknown_names[0]
         st.markdown(f"Le nom **'{current_unknown}'** de la convocation n'est pas reconnu.")
         
@@ -343,11 +350,7 @@ with tab1:
             if st.button(f"Associer '{current_unknown}' comme surnom de {linked_name}"):
                 idx = st.session_state.players_df[st.session_state.players_df["Nom du Joueur"] == linked_name].index[0]
                 existing_surnames = str(st.session_state.players_df.loc[idx, "Surnoms"]).strip()
-                
-                if existing_surnames:
-                    updated_surnames = f"{existing_surnames}, {current_unknown}"
-                else:
-                    updated_surnames = current_unknown
+                updated_surnames = f"{existing_surnames}, {current_unknown}" if existing_surnames else current_unknown
                     
                 st.session_state.players_df.loc[idx, "Surnoms"] = updated_surnames
                 save_data(st.session_state.players_df)
@@ -386,11 +389,8 @@ with tab1:
     counter_placeholder = st.empty()
     selected_names = []
     
-    # Affichage sécurisé de la grille de cases à cocher avec clé unique
     for i in range(0, len(df_sorted), 3):
         cols = st.columns(3)
-        
-        # Colonne 1
         row1 = df_sorted.iloc[i]
         name1 = row1["Nom du Joueur"]
         is_checked1 = name1 in st.session_state.auto_selected
@@ -401,7 +401,6 @@ with tab1:
             else:
                 st.session_state.auto_selected.discard(name1)
                 
-        # Colonne 2
         if i + 1 < len(df_sorted):
             row2 = df_sorted.iloc[i + 1]
             name2 = row2["Nom du Joueur"]
@@ -413,7 +412,6 @@ with tab1:
                 else:
                     st.session_state.auto_selected.discard(name2)
                     
-        # Colonne 3
         if i + 2 < len(df_sorted):
             row3 = df_sorted.iloc[i + 2]
             name3 = row3["Nom du Joueur"]
@@ -497,14 +495,46 @@ with tab1:
     if 'last_team1' in st.session_state and 'last_team2' in st.session_state:
         st.write("---")
         st.markdown("### 📊 Dernières équipes générées")
+        
+        # Affichage avec barres de progression Streamlit dans le tableau recap
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**🔵 Équipe 1**")
             st.dataframe(st.session_state.last_team1[["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif"]], hide_index=True)
+            
+            t1 = st.session_state.last_team1
+            att1 = t1['Attaque'].apply(text_to_score).sum()
+            def1 = t1['Défense'].apply(text_to_score).sum()
+            gk1  = t1['Gardien'].apply(text_to_score).sum()
+            col1 = t1['Collectif'].apply(text_to_score).sum()
+            
+            st.caption(f"Attaque ({att1}/50)")
+            st.progress(att1 / 50)
+            st.caption(f"Défense ({def1}/50)")
+            st.progress(def1 / 50)
+            st.caption(f"Gardien ({gk1}/50)")
+            st.progress(gk1 / 50)
+            st.caption(f"Collectif ({col1}/50)")
+            st.progress(col1 / 50)
+
         with c2:
             st.markdown("**🔴 Équipe 2**")
             st.dataframe(st.session_state.last_team2[["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif"]], hide_index=True)
-
+            
+            t2 = st.session_state.last_team2
+            att2 = t2['Attaque'].apply(text_to_score).sum()
+            def2 = t2['Défense'].apply(text_to_score).sum()
+            gk2  = t2['Gardien'].apply(text_to_score).sum()
+            col2 = t2['Collectif'].apply(text_to_score).sum()
+            
+            st.caption(f"Attaque ({att2}/50)")
+            st.progress(att2 / 50)
+            st.caption(f"Défense ({def2}/50)")
+            st.progress(def2 / 50)
+            st.caption(f"Gardien ({gk2}/50)")
+            st.progress(gk2 / 50)
+            st.caption(f"Collectif ({col2}/50)")
+            st.progress(col2 / 50)
 
 with tab2:
     st.header("Gestion de la base des joueurs")
@@ -535,7 +565,6 @@ with tab2:
     st.write("---")
     st.subheader("📝 Modification et édition directe de l'effectif")
     
-    # Nettoyage à la volée pour s'assurer du format des options Selectbox
     df_to_edit = st.session_state.players_df.copy()
     for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
         df_to_edit[col] = df_to_edit[col].apply(format_star_option)
@@ -562,7 +591,6 @@ with tab2:
 
     st.write("---")
 
-    # --- MODULE DE TÉLÉCHARGEMENT & RÉ-UPLOAD EXCEL (PLACÉ TOUT EN BAS) ---
     st.subheader("📥 / 📤 Import & Export de la Base Excel")
     col_dl, col_ul = st.columns(2)
     
