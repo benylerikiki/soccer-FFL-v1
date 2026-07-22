@@ -501,47 +501,6 @@ with tab1:
 with tab2:
     st.header("Gestion de la base des joueurs")
     
-    # --- MODULE DE TÉLÉCHARGEMENT & RÉ-UPLOAD EXCEL ---
-    st.subheader("📥 / 📤 Import & Export de la Base Excel")
-    col_dl, col_ul = st.columns(2)
-    
-    with col_dl:
-        st.markdown("**1. Télécharger la BDD actuelle**")
-        excel_buffer = io.BytesIO()
-        st.session_state.players_df.to_excel(excel_buffer, index=False)
-        excel_buffer.seek(0)
-        
-        st.download_button(
-            label="💾 Télécharger database_joueurs_v2.xlsx",
-            data=excel_buffer,
-            file_name="database_joueurs_v2.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        
-    with col_ul:
-        st.markdown("**2. Remplacer avec un fichier Excel modifié**")
-        uploaded_file = st.file_uploader("Importer une nouvelle base (.xlsx)", type=["xlsx"])
-        if uploaded_file is not None:
-            try:
-                new_df = pd.read_excel(uploaded_file)
-                # Vérification minimale des colonnes requises
-                required_cols = ["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif"]
-                if all(col in new_df.columns for col in required_cols):
-                    if "Surnoms" not in new_df.columns:
-                        new_df["Surnoms"] = ""
-                    new_df["Surnoms"] = new_df["Surnoms"].fillna("")
-                    
-                    st.session_state.players_df = new_df
-                    save_data(new_df)
-                    st.success("✅ Base de données mise à jour avec succès depuis le fichier téléversé !")
-                    st.rerun()
-                else:
-                    st.error("Le fichier importé doit contenir au moins les colonnes : Nom du Joueur, Attaque, Défense, Gardien, Collectif")
-            except Exception as e:
-                st.error(f"Erreur lors de la lecture du fichier Excel : {e}")
-
-    st.write("---")
-    
     with st.expander("➕ Ajouter manuellement un nouveau joueur"):
         with st.form("form_add"):
             name = st.text_input("Nom / Pseudo du joueur")
@@ -587,3 +546,43 @@ with tab2:
         save_data(edited_players)
         st.success("✅ Fichier Excel sauvegardé avec succès !")
         st.rerun()
+
+    st.write("---")
+
+    # --- MODULE DE TÉLÉCHARGEMENT & RÉ-UPLOAD EXCEL (PLACÉ TOUT EN BAS) ---
+    st.subheader("📥 / 📤 Import & Export de la Base Excel")
+    col_dl, col_ul = st.columns(2)
+    
+    with col_dl:
+        st.markdown("**1. Télécharger la BDD actuelle**")
+        excel_buffer = io.BytesIO()
+        st.session_state.players_df.to_excel(excel_buffer, index=False)
+        excel_buffer.seek(0)
+        
+        st.download_button(
+            label="💾 Télécharger database_joueurs_v2.xlsx",
+            data=excel_buffer,
+            file_name="database_joueurs_v2.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+    with col_ul:
+        st.markdown("**2. Remplacer avec un fichier Excel modifié**")
+        uploaded_file = st.file_uploader("Importer une nouvelle base (.xlsx)", type=["xlsx"])
+        if uploaded_file is not None:
+            try:
+                new_df = pd.read_excel(uploaded_file)
+                required_cols = ["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif"]
+                if all(col in new_df.columns for col in required_cols):
+                    if "Surnoms" not in new_df.columns:
+                        new_df["Surnoms"] = ""
+                    new_df["Surnoms"] = new_df["Surnoms"].fillna("")
+                    
+                    st.session_state.players_df = new_df
+                    save_data(new_df)
+                    st.success("✅ Base de données mise à jour avec succès depuis le fichier téléversé !")
+                    st.rerun()
+                else:
+                    st.error("Le fichier importé doit contenir au moins les colonnes : Nom du Joueur, Attaque, Défense, Gardien, Collectif")
+            except Exception as e:
+                st.error(f"Erreur lors de la lecture du fichier Excel : {e}")
