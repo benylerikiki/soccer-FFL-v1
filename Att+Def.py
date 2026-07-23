@@ -189,7 +189,6 @@ if st.session_state.get('show_landing', True):
             img_bytes = f.read()
         img_b64 = base64.b64encode(img_bytes).decode('utf-8')
         
-        # Le clic sur l'image déclenche le bouton invisible "enter_btn"
         img_html = f"""
         <div class="landing-container" onclick="document.getElementById('enter_btn').click();">
             <img class="landing-img" src="data:image/jpeg;base64,{img_b64}" alt="Soccer FFL Kompo Intro">
@@ -199,7 +198,6 @@ if st.session_state.get('show_landing', True):
     else:
         st.warning(f"⚠️ Fichier d'image introuvable (`{IMAGE_PATH}`). Enregistre l'image sous le nom `{IMAGE_PATH}` dans le même dossier que le script.")
 
-    # Bouton de déclenchement invisible lié au clic de l'image
     st.markdown('<div style="display:none;">', unsafe_allow_html=True)
     if st.button("Entrer", key="enter_btn"):
         st.session_state['show_landing'] = False
@@ -672,6 +670,9 @@ with tab2:
     st.write("---")
     st.subheader("📝 Modification et édition directe de l'effectif")
     
+    # BOUTON ENREGISTRER PLACÉ EN HAUT
+    btn_save_top = st.button("💾 Enregistrer les modifications", type="primary", key="save_btn_top")
+    
     df_to_edit = st.session_state.players_df.copy()
     if "Note Globale" in df_to_edit.columns:
         df_to_edit = df_to_edit.drop(columns=["Note Globale"])
@@ -702,7 +703,11 @@ with tab2:
     view_df["Note Globale"] = view_df.apply(calculate_global_score, axis=1)
     st.dataframe(view_df[["Nom du Joueur", "Note Globale"]], hide_index=True, use_container_width=True)
 
-    if st.button("💾 Enregistrer les modifications", type="primary"):
+    # BOUTON ENREGISTRER PLACÉ EN BAS
+    btn_save_bottom = st.button("💾 Enregistrer les modifications", type="primary", key="save_btn_bottom")
+
+    # TRAITEMENT DE LA SAUVEGARDE (DÉCLENCHÉ PAR L'UN OU L'AUTRE BOUTON)
+    if btn_save_top or btn_save_bottom:
         st.session_state.players_df = edited_players
         save_data(edited_players)
         st.success("✅ Fichier Excel sauvegardé avec succès !")
