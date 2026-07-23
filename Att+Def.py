@@ -18,8 +18,31 @@ LOGO_PATH = 'icon_ffl.png'
 VIDEO_PATH = 'FFL_Intro.mp4'  # Remplace par le nom exact de ton fichier vidéo MP4
 
 # Configuration de la page Streamlit
-page_icon = LOGO_PATH if os.path.exists(LOGO_PATH) else "⚽"
-st.set_page_config(page_title="Soccer FFL Kompo", page_icon=page_icon, layout="wide")
+st.set_page_config(
+    page_title="Soccer FFL Kompo", 
+    page_icon=LOGO_PATH if os.path.exists(LOGO_PATH) else "⚽", 
+    layout="wide"
+)
+
+# --- CONFIGURATION DE L'ICÔNE PWA MOBILE ---
+ICON_PATH = 'icon_ffl.png'  # Remplace par le nom de ton icône PNG s'il est différent
+
+if os.path.exists(ICON_PATH):
+    with open(ICON_PATH, "rb") as f:
+        icon_bytes = f.read()
+    icon_b64 = base64.b64encode(icon_bytes).decode('utf-8')
+    
+    # Injection des balises HTML pour iOS (Apple Touch Icon) et Android/Chrome
+    pwa_head_html = f"""
+        <head>
+            <link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,{icon_b64}">
+            <link rel="icon" type="image/png" sizes="192x192" href="data:image/png;base64,{icon_b64}">
+            <link rel="shortcut icon" href="data:image/png;base64,{icon_b64}">
+            <meta name="apple-mobile-web-app-capable" content="yes">
+            <meta name="apple-mobile-web-app-title" content="FFL Kompo">
+        </head>
+    """
+    st.markdown(pwa_head_html, unsafe_allow_html=True)
 
 # 📳 FORCE LE MODE GRILLE SUR MOBILE ET STYLE VIDÉO PLEIN ÉCRAN
 st.markdown(
