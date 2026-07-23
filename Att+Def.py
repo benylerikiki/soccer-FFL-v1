@@ -7,6 +7,7 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 import itertools
 import re
+import base64
 
 # Fichiers requis
 DATA_FILE = 'database_joueurs_v2.xlsx'       
@@ -20,7 +21,7 @@ VIDEO_PATH = 'FFL_Intro.mp4'  # Remplace par le nom exact de ton fichier vidéo 
 page_icon = LOGO_PATH if os.path.exists(LOGO_PATH) else "⚽"
 st.set_page_config(page_title="Soccer FFL Kompo", page_icon=page_icon, layout="wide")
 
-# 📳 FORCE LE MODE GRILLE SUR MOBILE ET GESTION DE LA PAGE DE GARDE
+# 📳 FORCE LE MODE GRILLE SUR MOBILE ET STYLE VIDÉO PLEIN ÉCRAN
 st.markdown(
     """
     <style>
@@ -41,16 +42,17 @@ st.markdown(
         }
     }
 
-    /* Style du conteneur de vidéo plein écran épuré */
+    /* Style du conteneur de vidéo pleine largeur sans éléments parasites */
     .landing-container {
-        position: relative;
         width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
         cursor: pointer;
-        text-align: center;
     }
     .landing-video {
         width: 100%;
-        max-height: 85vh;
+        max-height: 90vh;
         object-fit: cover;
         border-radius: 12px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
@@ -62,7 +64,7 @@ st.markdown(
 
 # --- INITIALISATION DE L'ÉTAT DE L'APPLICATION ---
 if 'show_landing' not in st.session_state:
-    st.session_state.show_landing = True
+    st.session_state['show_landing'] = True
 
 # 🌟 SYSTÈME DE NOTATION SUR 10 ÉTOILES
 TEXT_OPTIONS = [f"{i} ⭐" for i in range(1, 11)]
@@ -135,41 +137,35 @@ if 'auto_selected' not in st.session_state:
     st.session_state.auto_selected = set()
 
 # ==========================================
-# 🎬 PAGE DE GARDE AVEC VIDÉO EN BOUCLE
+# 🎬 PAGE DE GARDE : VIDÉO UNIQUEMENT
 # ==========================================
-if st.session_state.show_landing:
-    st.markdown("<h1 style='text-align: center; margin-bottom: 20px;'>⚽ SOCCER FFL KOMPO ⚽</h1>", unsafe_allow_html=True)
-    
+if st.session_state.get('show_landing', True):
     if os.path.exists(VIDEO_PATH):
-        # Lecture binaire du fichier vidéo pour garantir sa prise en charge HTML5
         with open(VIDEO_PATH, "rb") as f:
             video_bytes = f.read()
-            
-        import base64
         video_b64 = base64.b64encode(video_bytes).decode('utf-8')
         
+        # Le clic sur la vidéo déclenche le bouton invisible "enter_btn"
         video_html = f"""
-        <div class="landing-container">
+        <div class="landing-container" onclick="document.getElementById('enter_btn').click();">
             <video class="landing-video" autoplay loop muted playsinline>
                 <source src="data:video/mp4;base64,{video_b64}" type="video/mp4">
-                Votre navigateur ne prend pas en charge la vidéo HTML5.
             </video>
         </div>
         """
         st.markdown(video_html, unsafe_allow_html=True)
     else:
-        st.warning(f"⚠️ Fichier introuvable : Vérifie que le fichier '{VIDEO_PATH}' se trouve bien dans le même dossier que le script Python !")
+        st.warning(f"⚠️ Fichier vidéo introuvable (`{VIDEO_PATH}`). Place-le bien dans le même dossier que le script.")
 
-    st.write("")
-    st.markdown("<p style='text-align: center; font-size: 18px; color: #aaa;'>Clique sur le bouton ci-dessous pour accéder aux compositions :</p>", unsafe_allow_html=True)
-    
-    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
-    with col_l2:
-        if st.button("🚀 ENTRER DANS L'APPLICATION", type="primary", use_container_width=True):
-            st.session_state.show_landing = False
-            st.rerun()
+    # Bouton invisible utilisé par le script JavaScript du clic sur la vidéo
+    st.markdown('<div style="display:none;">', unsafe_allow_html=True)
+    if st.button("Entrer", key="enter_btn"):
+        st.session_state['show_landing'] = False
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    st.stop()
+    st.stop()  # Bloque l'exécution ici tant qu'on est sur la page de garde
+
 # ==========================================
 # ⚽ INTERFACE PRINCIPALE (COMPOS & GESTION)
 # ==========================================
@@ -307,7 +303,7 @@ with col_title:
     st.header("Soccer FFL Kompo")
 with col_home:
     if st.button("🏠 Accueil"):
-        st.session_state.show_landing = True
+        st.session_state['show_landing'] = True
         st.rerun()
 
 tab1, tab2 = st.tabs(["⚖️ Équilibrage du Jour", "🏃 Gestion de la Base"])
