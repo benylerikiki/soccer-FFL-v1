@@ -15,34 +15,48 @@ BLUE_CARD_PATH = 'card_blue.png'
 RED_CARD_PATH = 'card_red.png'
 FONT_PATH = 'FootballAttack.otf'
 LOGO_PATH = 'icon_ffl.png'
-VIDEO_PATH = 'FFL_Intro.mp4'  # Remplace par le nom exact de ton fichier vidéo MP4
+VIDEO_PATH = 'FFL_Intro.mp4'
+
+# --- 1. CHARGEMENT DE L'IMAGE POUR STREAMLIT ---
+app_icon = "⚽"
+if os.path.exists(LOGO_PATH):
+    try:
+        app_icon = Image.open(LOGO_PATH)  # Streamlit accepte directement les objets PIL Image
+    except Exception:
+        app_icon = "⚽"
 
 # Configuration de la page Streamlit
 st.set_page_config(
     page_title="Soccer FFL Kompo", 
-    page_icon=LOGO_PATH if os.path.exists(LOGO_PATH) else "⚽", 
+    page_icon=app_icon, 
     layout="wide"
 )
 
-# --- CONFIGURATION DE L'ICÔNE PWA MOBILE ---
-ICON_PATH = 'icon_ffl.png'  # Remplace par le nom de ton icône PNG s'il est différent
+# --- 2. INJECTION JAVASCRIPT / CSS POUR FORCER L'ICÔNE MOBILES ET WEBS ---
+ICON_PATH = LOGO_PATH if os.path.exists(LOGO_PATH) else None
 
-if os.path.exists(ICON_PATH):
+if ICON_PATH:
     with open(ICON_PATH, "rb") as f:
         icon_bytes = f.read()
     icon_b64 = base64.b64encode(icon_bytes).decode('utf-8')
     
-    # Injection des balises HTML pour iOS (Apple Touch Icon) et Android/Chrome
-    pwa_head_html = f"""
-        <head>
-            <link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,{icon_b64}">
-            <link rel="icon" type="image/png" sizes="192x192" href="data:image/png;base64,{icon_b64}">
-            <link rel="shortcut icon" href="data:image/png;base64,{icon_b64}">
-            <meta name="apple-mobile-web-app-capable" content="yes">
-            <meta name="apple-mobile-web-app-title" content="FFL Kompo">
-        </head>
+    # On force dynamiquement l'emplacement du favicon dans le VRAI <head> via JavaScript
+    pwa_javascript_fix = f"""
+        <script>
+            var link = document.querySelector("link[rel*='icon']") || document.createElement('link');
+            link.type = 'image/png';
+            link.rel = 'shortcut icon';
+            link.href = 'data:image/png;base64,{icon_b64}';
+            document.getElementsByTagName('head')[0].appendChild(link);
+
+            var appleLink = document.createElement('link');
+            appleLink.rel = 'apple-touch-icon';
+            appleLink.sizes = '180x180';
+            appleLink.href = 'data:image/png;base64,{icon_b64}';
+            document.getElementsByTagName('head')[0].appendChild(appleLink);
+        </script>
     """
-    st.markdown(pwa_head_html, unsafe_allow_html=True)
+    st.markdown(pwa_javascript_fix, unsafe_allow_html=True)
 
 # 📳 FORCE LE MODE GRILLE SUR MOBILE ET STYLE VIDÉO PLEIN ÉCRAN
 st.markdown(
