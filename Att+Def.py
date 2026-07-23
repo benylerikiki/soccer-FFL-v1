@@ -113,11 +113,11 @@ def load_data():
             
     return pd.DataFrame({
         "Nom du Joueur": ["Antho", "Cyril V", "Apou", "Benoit", "Nico P", "Mouyss", "Cédric", "Nico M", "David", "Cyril L"],
-        "Surnoms": ["", "Cyril", "", "beny", "nicop, nico", "mouys", "", "nicom, nico", "Dav, dimeh", "Cyril"],
         "Attaque": ["9 ⭐", "5 ⭐", "7 ⭐", "9 ⭐", "5 ⭐", "7 ⭐", "3 ⭐", "7 ⭐", "5 ⭐", "3 ⭐"],
         "Défense": ["5 ⭐", "9 ⭐", "5 ⭐", "3 ⭐", "9 ⭐", "3 ⭐", "9 ⭐", "5 ⭐", "7 ⭐", "7 ⭐"],
         "Gardien": ["3 ⭐", "5 ⭐", "7 ⭐", "3 ⭐", "7 ⭐", "5 ⭐", "9 ⭐", "3 ⭐", "5 ⭐", "5 ⭐"],
-        "Collectif": ["7 ⭐", "9 ⭐", "7 ⭐", "5 ⭐", "7 ⭐", "5 ⭐", "7 ⭐", "5 ⭐", "5 ⭐", "5 ⭐"]
+        "Collectif": ["7 ⭐", "9 ⭐", "7 ⭐", "5 ⭐", "7 ⭐", "5 ⭐", "7 ⭐", "5 ⭐", "5 ⭐", "5 ⭐"],
+        "Surnoms": ["", "Cyril", "", "beny", "nicop, nico", "mouys", "", "nicom, nico", "Dav, dimeh", "Cyril"]
     })
 
 def save_data(df):
@@ -128,6 +128,13 @@ def save_data(df):
     for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
         if col in clean_df.columns:
             clean_df[col] = clean_df[col].apply(format_star_option)
+            
+    # S'assure que les colonnes soient enregistrées dans un ordre logique
+    ordered_cols = ["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif", "Surnoms"]
+    existing_cols = [c for c in ordered_cols if c in clean_df.columns]
+    other_cols = [c for c in clean_df.columns if c not in ordered_cols]
+    clean_df = clean_df[existing_cols + other_cols]
+    
     clean_df.to_excel(DATA_FILE, index=False)
 
 if 'players_df' not in st.session_state:
@@ -145,7 +152,6 @@ if st.session_state.get('show_landing', True):
             video_bytes = f.read()
         video_b64 = base64.b64encode(video_bytes).decode('utf-8')
         
-        # Le clic sur la vidéo déclenche le bouton invisible "enter_btn"
         video_html = f"""
         <div class="landing-container" onclick="document.getElementById('enter_btn').click();">
             <video class="landing-video" autoplay loop muted playsinline>
@@ -157,14 +163,13 @@ if st.session_state.get('show_landing', True):
     else:
         st.warning(f"⚠️ Fichier vidéo introuvable (`{VIDEO_PATH}`). Place-le bien dans le même dossier que le script.")
 
-    # Bouton invisible utilisé par le script JavaScript du clic sur la vidéo
     st.markdown('<div style="display:none;">', unsafe_allow_html=True)
     if st.button("Entrer", key="enter_btn"):
         st.session_state['show_landing'] = False
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.stop()  # Bloque l'exécution ici tant qu'on est sur la page de garde
+    st.stop()
 
 # ==========================================
 # ⚽ INTERFACE PRINCIPALE (COMPOS & GESTION)
@@ -417,8 +422,8 @@ with tab1:
                         new_clean = new_clean_name.strip()
                         new_p = pd.DataFrame({
                             "Nom du Joueur": [new_clean], 
-                            "Surnoms": [current_unknown if new_clean != current_unknown else ""],
-                            "Attaque": [att_l], "Défense": [def_l], "Gardien": [gk_l], "Collectif": [col_l]
+                            "Attaque": [att_l], "Défense": [def_l], "Gardien": [gk_l], "Collectif": [col_l],
+                            "Surnoms": [current_unknown if new_clean != current_unknown else ""]
                         })
                         st.session_state.players_df = pd.concat([st.session_state.players_df, new_p], ignore_index=True)
                         save_data(st.session_state.players_df)
@@ -593,18 +598,18 @@ with tab2:
         with st.expander("➕ Ajouter un nouveau joueur"):
             with st.form("form_add"):
                 name = st.text_input("Nom / Pseudo du joueur")
-                surnames = st.text_input("Surnoms séparés par des virgules (Optionnel)", placeholder="ex: Nico, Nick")
                 att_label = st.selectbox("Niveau en Attaque", options=TEXT_OPTIONS, index=4)
                 def_label = st.selectbox("Niveau en Défense", options=TEXT_OPTIONS, index=4)
                 gk_label  = st.selectbox("Niveau en Gardien", options=TEXT_OPTIONS, index=4)
                 col_label = st.selectbox("Niveau en Collectif", options=TEXT_OPTIONS, index=4)
+                surnames = st.text_input("Surnoms séparés par des virgules (Optionnel)", placeholder="ex: Nico, Nick")
                 
                 if st.form_submit_button("Ajouter le joueur"):
                     if name.strip() and name.strip() not in st.session_state.players_df["Nom du Joueur"].values:
                         new_player = pd.DataFrame({
                             "Nom du Joueur": [name.strip()], 
-                            "Surnoms": [surnames.strip()],
-                            "Attaque": [att_label], "Défense": [def_label], "Gardien": [gk_label], "Collectif": [col_label]
+                            "Attaque": [att_label], "Défense": [def_label], "Gardien": [gk_label], "Collectif": [col_label],
+                            "Surnoms": [surnames.strip()]
                         })
                         st.session_state.players_df = pd.concat([st.session_state.players_df, new_player], ignore_index=True)
                         save_data(st.session_state.players_df)
@@ -635,17 +640,22 @@ with tab2:
         df_to_edit = df_to_edit.drop(columns=["Note Globale"])
 
     for col in ["Attaque", "Défense", "Gardien", "Collectif"]:
-        df_to_edit[col] = df_to_edit[col].apply(format_star_option)
+        if col in df_to_edit.columns:
+            df_to_edit[col] = df_to_edit[col].apply(format_star_option)
+
+    # Réorganisation explicite des colonnes : Nom -> Attaque -> Défense -> Gardien -> Collectif -> Surnoms
+    column_order = ["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif", "Surnoms"]
+    df_to_edit = df_to_edit[[c for c in column_order if c in df_to_edit.columns]]
 
     edited_players = st.data_editor(
         df_to_edit, 
         column_config={
             "Nom du Joueur": st.column_config.TextColumn("Nom du Joueur", required=True),
-            "Surnoms": st.column_config.TextColumn("Surnoms (séparés par des virgules)", help="Ex: Nico, Nick, Ptit Nico"),
             "Attaque": st.column_config.SelectboxColumn("Attaque", options=TEXT_OPTIONS, required=True),
             "Défense": st.column_config.SelectboxColumn("Défense", options=TEXT_OPTIONS, required=True),
             "Gardien": st.column_config.SelectboxColumn("Gardien", options=TEXT_OPTIONS, required=True),
             "Collectif": st.column_config.SelectboxColumn("Collectif", options=TEXT_OPTIONS, required=True),
+            "Surnoms": st.column_config.TextColumn("Surnoms (séparés par des virgules)", help="Ex: Nico, Nick, Ptit Nico"),
         }, 
         hide_index=True, 
         use_container_width=True
