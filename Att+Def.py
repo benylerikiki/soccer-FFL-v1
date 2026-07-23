@@ -15,13 +15,13 @@ BLUE_CARD_PATH = 'card_blue.png'
 RED_CARD_PATH = 'card_red.png'
 FONT_PATH = 'FootballAttack.otf'
 LOGO_PATH = 'icon_ffl.png'
-VIDEO_PATH = 'FFL_Intro.mp4'
+IMAGE_PATH = 'Intro.jpeg'  # Image de garde d'accueil
 
-# --- 1. CHARGEMENT DE L'IMAGE POUR STREAMLIT ---
+# --- 1. CHARGEMENT DE L'ICÔNE POUR STREAMLIT ---
 app_icon = "⚽"
 if os.path.exists(LOGO_PATH):
     try:
-        app_icon = Image.open(LOGO_PATH)  # Streamlit accepte directement les objets PIL Image
+        app_icon = Image.open(LOGO_PATH)
     except Exception:
         app_icon = "⚽"
 
@@ -32,15 +32,12 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- 2. INJECTION JAVASCRIPT / CSS POUR FORCER L'ICÔNE MOBILES ET WEBS ---
-ICON_PATH = LOGO_PATH if os.path.exists(LOGO_PATH) else None
-
-if ICON_PATH:
-    with open(ICON_PATH, "rb") as f:
+# --- 2. INJECTION JAVASCRIPT / CSS POUR FORCER L'ICÔNE SUR MOBILE (PWA) ---
+if os.path.exists(LOGO_PATH):
+    with open(LOGO_PATH, "rb") as f:
         icon_bytes = f.read()
     icon_b64 = base64.b64encode(icon_bytes).decode('utf-8')
     
-    # On force dynamiquement l'emplacement du favicon dans le VRAI <head> via JavaScript
     pwa_javascript_fix = f"""
         <script>
             var link = document.querySelector("link[rel*='icon']") || document.createElement('link');
@@ -58,7 +55,7 @@ if ICON_PATH:
     """
     st.markdown(pwa_javascript_fix, unsafe_allow_html=True)
 
-# 📳 FORCE LE MODE GRILLE SUR MOBILE ET STYLE VIDÉO PLEIN ÉCRAN
+# 📳 FORCE LE MODE GRILLE SUR MOBILE ET STYLE IMAGE D'ACCUEIL
 st.markdown(
     """
     <style>
@@ -79,7 +76,7 @@ st.markdown(
         }
     }
 
-    /* Style du conteneur de vidéo pleine largeur sans éléments parasites */
+    /* Style du conteneur de l'image de garde cliquable */
     .landing-container {
         width: 100%;
         display: flex;
@@ -87,12 +84,16 @@ st.markdown(
         align-items: center;
         cursor: pointer;
     }
-    .landing-video {
+    .landing-img {
         width: 100%;
-        max-height: 90vh;
-        object-fit: cover;
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        max-height: 85vh;
+        object-fit: contain;
+        border-radius: 16px;
+        box-shadow: 0 6px 25px rgba(0,0,0,0.6);
+        transition: transform 0.2s ease-in-out;
+    }
+    .landing-img:hover {
+        transform: scale(1.01);
     }
     </style>
     """,
@@ -166,7 +167,6 @@ def save_data(df):
         if col in clean_df.columns:
             clean_df[col] = clean_df[col].apply(format_star_option)
             
-    # S'assure que les colonnes soient enregistrées dans un ordre logique
     ordered_cols = ["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif", "Surnoms"]
     existing_cols = [c for c in ordered_cols if c in clean_df.columns]
     other_cols = [c for c in clean_df.columns if c not in ordered_cols]
@@ -181,25 +181,25 @@ if 'auto_selected' not in st.session_state:
     st.session_state.auto_selected = set()
 
 # ==========================================
-# 🎬 PAGE DE GARDE : VIDÉO UNIQUEMENT
+# 🖼️ PAGE DE GARDE : IMAGE CLIQUABLE
 # ==========================================
 if st.session_state.get('show_landing', True):
-    if os.path.exists(VIDEO_PATH):
-        with open(VIDEO_PATH, "rb") as f:
-            video_bytes = f.read()
-        video_b64 = base64.b64encode(video_bytes).decode('utf-8')
+    if os.path.exists(IMAGE_PATH):
+        with open(IMAGE_PATH, "rb") as f:
+            img_bytes = f.read()
+        img_b64 = base64.b64encode(img_bytes).decode('utf-8')
         
-        video_html = f"""
+        # Le clic sur l'image déclenche le bouton invisible "enter_btn"
+        img_html = f"""
         <div class="landing-container" onclick="document.getElementById('enter_btn').click();">
-            <video class="landing-video" autoplay loop muted playsinline>
-                <source src="data:video/mp4;base64,{video_b64}" type="video/mp4">
-            </video>
+            <img class="landing-img" src="data:image/jpeg;base64,{img_b64}" alt="Soccer FFL Kompo Intro">
         </div>
         """
-        st.markdown(video_html, unsafe_allow_html=True)
+        st.markdown(img_html, unsafe_allow_html=True)
     else:
-        st.warning(f"⚠️ Fichier vidéo introuvable (`{VIDEO_PATH}`). Place-le bien dans le même dossier que le script.")
+        st.warning(f"⚠️ Fichier d'image introuvable (`{IMAGE_PATH}`). Enregistre l'image sous le nom `{IMAGE_PATH}` dans le même dossier que le script.")
 
+    # Bouton de déclenchement invisible lié au clic de l'image
     st.markdown('<div style="display:none;">', unsafe_allow_html=True)
     if st.button("Entrer", key="enter_btn"):
         st.session_state['show_landing'] = False
@@ -680,7 +680,6 @@ with tab2:
         if col in df_to_edit.columns:
             df_to_edit[col] = df_to_edit[col].apply(format_star_option)
 
-    # Réorganisation explicite des colonnes : Nom -> Attaque -> Défense -> Gardien -> Collectif -> Surnoms
     column_order = ["Nom du Joueur", "Attaque", "Défense", "Gardien", "Collectif", "Surnoms"]
     df_to_edit = df_to_edit[[c for c in column_order if c in df_to_edit.columns]]
 
