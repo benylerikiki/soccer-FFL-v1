@@ -14,12 +14,13 @@ BLUE_CARD_PATH = 'card_blue.png'
 RED_CARD_PATH = 'card_red.png'
 FONT_PATH = 'FootballAttack.otf'
 LOGO_PATH = 'icon_ffl.png'
+VIDEO_PATH = 'FFL_Intro.mp4'  # Remplace par le nom exact de ton fichier vidéo MP4
 
 # Configuration de la page Streamlit
 page_icon = LOGO_PATH if os.path.exists(LOGO_PATH) else "⚽"
 st.set_page_config(page_title="Soccer FFL Kompo", page_icon=page_icon, layout="wide")
 
-# 📳 FORCE LE MODE GRILLE SUR MOBILE
+# 📳 FORCE LE MODE GRILLE SUR MOBILE ET GESTION DE LA PAGE DE GARDE
 st.markdown(
     """
     <style>
@@ -39,10 +40,29 @@ st.markdown(
             font-size: 13px !important;
         }
     }
+
+    /* Style du conteneur de vidéo plein écran épuré */
+    .landing-container {
+        position: relative;
+        width: 100%;
+        cursor: pointer;
+        text-align: center;
+    }
+    .landing-video {
+        width: 100%;
+        max-height: 85vh;
+        object-fit: cover;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
     </style>
     """,
     unsafe_allow_html=True
 )
+
+# --- INITIALISATION DE L'ÉTAT DE L'APPLICATION ---
+if 'show_landing' not in st.session_state:
+    st.session_state.show_landing = True
 
 # 🌟 SYSTÈME DE NOTATION SUR 10 ÉTOILES
 TEXT_OPTIONS = [f"{i} ⭐" for i in range(1, 11)]
@@ -113,6 +133,43 @@ if 'players_df' not in st.session_state:
 
 if 'auto_selected' not in st.session_state:
     st.session_state.auto_selected = set()
+
+# ==========================================
+# 🎬 PAGE DE GARDE AVEC VIDÉO EN BOUCLE
+# ==========================================
+if st.session_state.show_landing:
+    st.markdown("<h1 style='text-align: center; margin-bottom: 20px;'>⚽ SOCCER FFL KOMPO ⚽</h1>", unsafe_allow_html=True)
+    
+    # Affichage de la vidéo qui s'adapte à la largeur de l'écran
+    if os.path.exists(VIDEO_PATH):
+        # Utilisation du player HTML5 natif pour boucler automatiquement en muet (autoplay garanti)
+        video_html = f"""
+        <div class="landing-container">
+            <video class="landing-video" autoplay loop muted playsinline>
+                <source src="{VIDEO_PATH}" type="video/mp4">
+                Votre navigateur ne prend pas en charge la vidéo HTML5.
+            </video>
+        </div>
+        """
+        st.markdown(video_html, unsafe_allow_html=True)
+    else:
+        st.info(f"💡 Place le fichier vidéo sous le nom `{VIDEO_PATH}` dans le dossier de ton projet pour voir l'animation !")
+
+    st.write("")
+    st.markdown("<p style='text-align: center; font-size: 18px; color: #aaa;'>Clique sur le bouton ci-dessous pour accéder aux compositions :</p>", unsafe_allow_html=True)
+    
+    # Bouton géant pour entrer dans l'application
+    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
+    with col_l2:
+        if st.button("🚀 ENTRER DANS L'APPLICATION", type="primary", use_container_width=True):
+            st.session_state.show_landing = False
+            st.rerun()
+
+    st.stop()  # Arrate l'exécution ici tant qu'on est sur la page de garde
+
+# ==========================================
+# ⚽ INTERFACE PRINCIPALE (COMPOS & GESTION)
+# ==========================================
 
 # --- GÉNÉRATION DES CARTES JOUEURS ---
 def create_player_card(card_path, player_name):
@@ -236,15 +293,19 @@ def show_teams_popup(t1, t2):
     st.code(text_whatsapp, language="text")
     if st.button("Fermer"): st.rerun()
 
-# --- INTERFACE PRINCIPALE ---
-col_logo, col_title = st.columns([1, 6])
+# --- EN-TÊTE PRINCIPAL ---
+col_logo, col_title, col_home = st.columns([1, 5, 1])
 with col_logo:
     if os.path.exists(LOGO_PATH):
-        st.image(LOGO_PATH, width=90)
+        st.image(LOGO_PATH, width=80)
     else:
         st.title("⚽")
 with col_title:
     st.header("Soccer FFL Kompo")
+with col_home:
+    if st.button("🏠 Accueil"):
+        st.session_state.show_landing = True
+        st.rerun()
 
 tab1, tab2 = st.tabs(["⚖️ Équilibrage du Jour", "🏃 Gestion de la Base"])
 
@@ -570,7 +631,6 @@ with tab2:
     st.write("---")
     st.subheader("📝 Modification et édition directe de l'effectif")
     
-    # Préparation propre des données éditables
     df_to_edit = st.session_state.players_df.copy()
     if "Note Globale" in df_to_edit.columns:
         df_to_edit = df_to_edit.drop(columns=["Note Globale"])
@@ -592,7 +652,6 @@ with tab2:
         use_container_width=True
     )
 
-    # Affichage séparé et informatif de la Note Globale calculée
     st.markdown("##### 📊 Aperçu des Notes Globales (Moyennes calculées)")
     view_df = edited_players.copy()
     view_df["Note Globale"] = view_df.apply(calculate_global_score, axis=1)
