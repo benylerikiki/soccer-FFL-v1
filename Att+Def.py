@@ -140,33 +140,36 @@ if 'auto_selected' not in st.session_state:
 if st.session_state.show_landing:
     st.markdown("<h1 style='text-align: center; margin-bottom: 20px;'>⚽ SOCCER FFL KOMPO ⚽</h1>", unsafe_allow_html=True)
     
-    # Affichage de la vidéo qui s'adapte à la largeur de l'écran
     if os.path.exists(VIDEO_PATH):
-        # Utilisation du player HTML5 natif pour boucler automatiquement en muet (autoplay garanti)
+        # Lecture binaire du fichier vidéo pour garantir sa prise en charge HTML5
+        with open(VIDEO_PATH, "rb") as f:
+            video_bytes = f.read()
+            
+        import base64
+        video_b64 = base64.b64encode(video_bytes).decode('utf-8')
+        
         video_html = f"""
         <div class="landing-container">
             <video class="landing-video" autoplay loop muted playsinline>
-                <source src="{VIDEO_PATH}" type="video/mp4">
+                <source src="data:video/mp4;base64,{video_b64}" type="video/mp4">
                 Votre navigateur ne prend pas en charge la vidéo HTML5.
             </video>
         </div>
         """
         st.markdown(video_html, unsafe_allow_html=True)
     else:
-        st.info(f"💡 Place le fichier vidéo sous le nom `{VIDEO_PATH}` dans le dossier de ton projet pour voir l'animation !")
+        st.warning(f"⚠️ Fichier introuvable : Vérifie que le fichier '{VIDEO_PATH}' se trouve bien dans le même dossier que le script Python !")
 
     st.write("")
     st.markdown("<p style='text-align: center; font-size: 18px; color: #aaa;'>Clique sur le bouton ci-dessous pour accéder aux compositions :</p>", unsafe_allow_html=True)
     
-    # Bouton géant pour entrer dans l'application
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
     with col_l2:
         if st.button("🚀 ENTRER DANS L'APPLICATION", type="primary", use_container_width=True):
             st.session_state.show_landing = False
             st.rerun()
 
-    st.stop()  # Arrate l'exécution ici tant qu'on est sur la page de garde
-
+    st.stop()
 # ==========================================
 # ⚽ INTERFACE PRINCIPALE (COMPOS & GESTION)
 # ==========================================
